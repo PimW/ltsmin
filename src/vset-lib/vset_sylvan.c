@@ -755,6 +755,14 @@ set_intersect(vset_t dst, vset_t src)
     }
 }
 
+static void
+set_join(vset_t dst, vset_t left, vset_t right)
+{
+    LACE_ME;
+
+    dst->bdd = sylvan_and(left->bdd, right->bdd);
+}
+
 /**
  * Calculate dst = dst - src
  */
@@ -1301,6 +1309,7 @@ dom_set_function_pointers(vdom_t dom)
     dom->shared.set_example=set_example;
     dom->shared.set_union=set_union;
     dom->shared.set_intersect=set_intersect;
+    dom->shared.set_join=set_join;
     dom->shared.set_minus=set_minus;
     dom->shared.set_zip=set_zip;
     dom->shared.set_project=set_project;
