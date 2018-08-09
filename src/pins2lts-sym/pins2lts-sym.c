@@ -492,16 +492,20 @@ static void actual_main(void *arg)
     /* check the invariants at level 0 */
     check_invariants(visited, 0);
 
-    if (local) run_local (initial, visited);
-
-    /* run reachability */
     run_reachability(visited, files[1]);
 
-    if (sccs) detect_sccs (visited);
+
+    if (sccs) detect_sccs(visited);
 
     /* report states */
     final_stat_reporting(visited);
 
+    if (local) {
+        run_local (visited, visited);
+    } else {
+        /* run reachability */
+
+    }
     /* save LTS */
     if (files[1] != NULL) {
         char *ext = strrchr(files[1], '.');

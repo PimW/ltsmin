@@ -457,11 +457,13 @@ set_example(vset_t set, int *e)
 /**
  * Compute the intersection of two short vectors into <dst>.
  * The vectors can be different projections.
+ * requires: dst->meta == left->meta \/ right->meta
  */
 static void
 set_join(vset_t dst, vset_t left, vset_t right)
 {
     LACE_ME;
+    // TODO: assert requirement
     dst->mdd = lddmc_join(left->mdd, right->mdd, left->meta, right->meta);
 }
 

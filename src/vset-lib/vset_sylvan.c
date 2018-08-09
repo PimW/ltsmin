@@ -759,7 +759,6 @@ static void
 set_join(vset_t dst, vset_t left, vset_t right)
 {
     LACE_ME;
-
     dst->bdd = sylvan_and(left->bdd, right->bdd);
 }
 

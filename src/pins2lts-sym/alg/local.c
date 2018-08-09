@@ -25,6 +25,9 @@
 #include <util-lib/bitset.h>
 #include <util-lib/dfs-stack.h>
 #include <util-lib/util.h>
+#include <aux/prop.h>
+
+#include <alg/rpdr.h>
 
 
 /**
@@ -159,13 +162,35 @@ explore_cb (void *context, int *src)
     explored++;
 }
 
+static void vset_count_info(vset_t set, int level)
+{
+    long count;
+    long double el;
+    vset_count_fn(set, &count, &el);
+    Warning (info, "level: %ld\t\t nodes: %ld\t\t states: %.0Lf", level, count, el);
+}
+
 int
-reach_local (vset_t V)
+reach_local (vset_t I, vset_t V)
 {
     int                 level = 0;
     bool                all_done;
 
-    do {
+    vset_t states = vset_create (domain, -1, NULL);
+    vset_t tmp = vset_create (domain, -1, NULL);
+    vset_count_info(I, level);
+
+    do { // while \exists_i \in [1..K] : Q^r_i != 0 do
+
+        vset_clear(states);
+        vset_union(states, V_r[0]);
+
+        for (int i = 1; i < nGrps; i++) {
+            vset_intersect(states, V_r[i]);
+
+        }
+        vset_count_info(states, level);
+
         level++;
         for (int i = 0; i < nGrps; i++) {
             //write_group_t      *wg = &writers[i];
@@ -231,6 +256,33 @@ reach_local (vset_t V)
         //vset_reorder (domain);
 
     } while (!all_done);
+
+    vset_clear(states);
+    vset_union(states, V_r[0]);
+
+    for (int i = 1; i < nGrps; i++) {
+        vset_intersect(states, V_r[i]);
+
+    }
+    vset_count_info(states, level);
+
+    Warning(info, "Checking invariants");
+    vset_t unsafe = vset_create (domain, inv_proj[0]->count, inv_proj[0]->data);
+
+    Warning(info, "Finding counter-examples");
+    find_counter_examples(states, unsafe);
+
+    vset_t U = vset_create(domain, -1, NULL);
+
+    vset_union(U, unsafe);
+
+    vset_destroy(unsafe);
+
+    //Warning(info, "Running PDR");
+    //reach_pdr(I, U, states, level);
+
+//    Warning(info, "Traditional invariant check");
+//    check_invariants(states, level);
 
     return level;
     (void) V;
@@ -426,7 +478,7 @@ run_local (vset_t I, vset_t V)
     init_local (I);
 
     RTstartTimer(reach_timer);
-    int level = reach_local (V);
+    int level = reach_local (I, V);
     RTstopTimer(reach_timer);
 
     print_local (V, level);

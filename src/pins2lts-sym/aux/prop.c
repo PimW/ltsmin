@@ -725,18 +725,66 @@ eval_predicate_set(ltsmin_expr_t e, ltsmin_parse_env_t env, vset_t states)
     }
 }
 
+/**
+ * First version of the unsafe state detection function, for now assumes a single invariant for simplicity
+ *
+ * @param states
+ */
+inline void
+find_counter_examples(vset_t states, vset_t ce_states)
+{
+    // Only check if not all invariant have been violated and there are states
+    if (num_inv_violated != num_inv && !vset_is_empty(states)) {
+        int iv = 0;
+        // For each invariant
+        for (int i = 0; i < num_inv; i++) {
+            // Check if it was already violated
+            if (!inv_violated[i]) {
+                vset_project(inv_set[i], states);
+                // Make copy of the invariant set
+                vset_t container = ((struct inv_info_s*) inv_expr[i]->context)->container;
+                vset_copy(container, inv_set[i]);
+                // Evaluate the invariant expression on the container set (in the expression ccontext)
+                eval_predicate_set(inv_expr[i], inv_parse_env[i], states);
+                // Compare the original projected states set with the states
+                Warning(info, "equality check");
+                if (!vset_equal(inv_set[i], container)) {
+
+                    vset_copy(ce_states, inv_set[i]);
+                    vset_minus(ce_states, container);
+
+                    Warning(info, " ");
+                    Warning(info, "Invariant violation (%s)!", inv_detect[i]);
+                    Warning(info, " ");
+                    inv_violated[i] = 1;
+                    iv = 1;
+                    num_inv_violated++;
+                }
+            }
+        }
+        if (iv) inv_cleanup();
+    }
+}
+
 static inline void
 check_inv(vset_t states, const int level)
 {
+    // Only check if not all invariant have been violated and there are states
     if (num_inv_violated != num_inv && !vset_is_empty(states)) {
         int iv = 0;
+        // For each invariant
         for (int i = 0; i < num_inv; i++) {
+            // Check if it was already violated
             if (!inv_violated[i]) {
+                // Project states on the domain of the invariant set
                 vset_project(inv_set[i], states);
                 if (!vset_is_empty(inv_set[i])) {
+                    // Make copy of the invariant set
                     vset_t container = ((struct inv_info_s*) inv_expr[i]->context)->container;
                     vset_copy(container, inv_set[i]);
+                    // Evaluate the invariant expression on the container set (in the expression ccontext)
                     eval_predicate_set(inv_expr[i], inv_parse_env[i], states);
+                    // Compare the original projected states set with the states
                     if (!vset_equal(inv_set[i], container)) {
                         LTSminExprDestroy(inv_expr[i], 1);
                         LTSminParseEnvDestroy(inv_parse_env[i]);

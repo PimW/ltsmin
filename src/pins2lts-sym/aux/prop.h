@@ -26,6 +26,8 @@ extern void find_trace(int trace_end[][N], int end_count, int level,
 
 extern void find_action(int* src, int* dst, int* cpy, int group, char* action);
 
+extern void find_counter_examples(vset_t states, vset_t ce_states);
+
 extern void check_invariants(vset_t set, int level);
 
 extern void deadlock_check(vset_t deadlocks, bitvector_t *reach_groups);
