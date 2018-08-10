@@ -309,7 +309,7 @@ reach_local (vset_t I, vset_t V)
         all_done = true;
         for (int i = 0; i < nGrps; i++) {
             //vset_copy(X_r[i], Q_r[i]);
-            //vset_minus   (Q_r[i], V_r[i]);
+            vset_minus   (Q_r[i], V_r[i]);
             //vset_count_info(Q_r[i], i, level);
             all_done &= vset_is_empty (Q_r[i]);
             //vset_copy   (Q_r[i], X_r[i]);
