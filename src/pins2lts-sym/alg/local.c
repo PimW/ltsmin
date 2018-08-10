@@ -139,8 +139,16 @@ void
 print_state_r (void *context, int *src)
 {
     int group = *(int *)context;
-    Statef (debug, src, r_projs[group]);
-    Printf (debug, " (%d)\n", group);
+    Statef (info, src, r_projs[group]);
+    Printf (info, " (%d)\n", group);
+}
+
+void
+print_state_w (void *context, int *src)
+{
+    int group = *(int *)context;
+    Statef (info, src, w_projs[group]);
+    Printf (info, " (%d)\n", group);
 }
 
 void
@@ -162,12 +170,12 @@ explore_cb (void *context, int *src)
     explored++;
 }
 
-static void vset_count_info(vset_t set, int level)
+static void vset_count_info(vset_t set, int group,  int level)
 {
     long count;
     long double el;
     vset_count_fn(set, &count, &el);
-    Warning (info, "level: %ld\t\t nodes: %ld\t\t states: %.0Lf", level, count, el);
+    Warning (info, "level: %ld\t\t group: %ld\t\t nodes: %ld\t\t states: %.0Lf", level, group, count, el);
 }
 
 int
@@ -178,18 +186,22 @@ reach_local (vset_t I, vset_t V)
 
     vset_t states = vset_create (domain, -1, NULL);
     vset_t tmp = vset_create (domain, -1, NULL);
-    vset_count_info(I, level);
+    vset_count_info(I, -1, level);
+
+
 
     do { // while \exists_i \in [1..K] : Q^r_i != 0 do
 
-        vset_clear(states);
-        vset_union(states, V_r[0]);
-
-        for (int i = 1; i < nGrps; i++) {
-            vset_intersect(states, V_r[i]);
-
-        }
-        vset_count_info(states, level);
+//        vset_clear(states);
+//        for (int i = 0; i < nGrps; i++) {
+//            vset_union(states, V_r[i]);
+//        }
+//
+//        for (int i = 0; i < nGrps; i++) {
+//            vset_intersect(states, V_r[i]);
+//        }
+//        Warning(info, "Total full states: ");
+//        vset_count_info(states, -1, level);
 
         level++;
         for (int i = 0; i < nGrps; i++) {
@@ -197,6 +209,8 @@ reach_local (vset_t I, vset_t V)
 
             vset_clear   (Q_w[i]);
             vset_enum    (Q_r[i], explore_cb, &i);
+            //vset_count_info(Q_w[i], i, level);
+            vset_project(Q_w[i], Q_w[i]);
             vset_union   (V_w[i], Q_w[i]);
             vset_union   (V_r[i], Q_r[i]);
 //            if (wg->complement != NULL) {
@@ -211,14 +225,15 @@ reach_local (vset_t I, vset_t V)
             vset_clear   (Q_r[i]);
         }
 
-        all_done = true;
+
+
         for (int i = 0; i < nGrps; i++) {
             write_group_t *wg = &writers[i];
             for (reader_t *r = r_bgn(wg); r <  r_end(wg); r++) {
                 int j = r->index;
                 if (r->tmp == NULL) { // writer's domain overlaps reader
                     vset_project (X_r[j], Q_w[i]);
-                    vset_minus   (X_r[j], V_r[j]);
+                    //vset_minus   (X_r[j], V_r[j]);
                     long n1;
                     long double e1;
                     vset_count_fn (X_r[j], &n1, &e1);
@@ -227,56 +242,128 @@ reach_local (vset_t I, vset_t V)
                     vset_union   (Q_r[j], X_r[j]);
                     vset_clear   (X_r[j]);
                 } else {
-                    long n1;// n2, n3, n4;
-                    long double e1;// e2, e3, e4;
-                    vset_project        (r->tmp,        Q_w[i]);
+                    long n1, n2, n3, n4;
+                    long double e1, e2, e3, e4;
+//                    Printf(info, "r->tmp: [");
+//                    for (int *s = ci_begin(r->slots); s < ci_end(r->slots); s++) {
+//                        Printf (info, "%2d,", *s);
+//                    }
+//                    Printf (info, "]  ");
+//                    Printf(info, "r->compl: [");
+//                    for (int *s = ci_begin(r->compl); s < ci_end(r->compl); s++) {
+//                        Printf (info, "%2d,", *s);
+//                    }
+//                    Printf (info, "]  ");
+//                    Printf(info, "Q_w[%d]:  [", i);
+//                    for (int *s = ci_begin(w_projs[i]); s < ci_end(w_projs[i]); s++) {
+//                        Printf (info, "%2d,", *s);
+//                    }
+//                    Printf (info, "]  ");
+//                    Printf(info, "V_r[%d]: [", j);
+//                    for (int *s = ci_begin(r_projs[j]); s < ci_end(r_projs[j]); s++) {
+//                        Printf (info, "%2d,", *s);
+//                    }
+//                    Printf (info, "]\n");
+//
+//
+//                    Warning(info, "Write projected queue:");
+//                    vset_project(Q_w[i], Q_w[i]);
+//                    vset_enum    (Q_w[i], print_state_w, &i);
+//                    Warning(info, "Read projected visited:");
+//                    vset_enum    (V_r[j], print_state_r, &j);
+
+
+                    vset_project        (r->tmp,        Q_w[i]); // r_j w_i (Post(Q_r[i]))
                     vset_count_fn (r->tmp, &n1, &e1);
                     if (e1 != 0) {
-                        vset_project        (r->complement, V_r[j]);
-                        vset_join   (X_r[j], r->complement, r->tmp);
+                        vset_project        (r->complement, V_r[j]);    // r_j -w_i (V_r[i])
+                        //vset_project(X_r[j], r->complement);
+                        vset_join (X_r[j], r->complement, r->tmp);
 //                        vset_count_fn (r->tmp, &n1, &e1);
 //                        vset_count_fn (r->complement, &n2, &e2);
 //                        vset_count_fn (X_r[j], &n3, &e3);
-                        vset_minus          (X_r[j],        V_r[j]);
+                        //vset_minus          (X_r[j],        V_r[j]);
 //                        vset_count_fn (X_r[j], &n4, &e4);
 //                        if (e4 > 0) {
 //                            vset_enum(X_r[j], print_state_r, &j);
 //                            Warning (infoLong, "%.0Lf X %.0Lf =%s= %.0Lf --> %.0Lf\t\t%d>%d", e1, e2, e1 * e2 == e3 ? "=" : "!", e3, e4, i, j);
 //                        }
                         vset_union          (Q_r[j],        X_r[j]);
-                        all_done &= vset_is_empty (X_r[j]);
+                        //all_done &= vset_is_empty (X_r[j]);
+//                        Warning(info, "Read projected new:");
+//                        vset_enum    (X_r[j], print_state_r, &j);
+//                        if (!vset_is_empty(X_r[j])) {
+//                            Warning(info, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+//                        }
                         vset_clear (X_r[j]);
                         vset_clear (r->complement);
                     }
                     vset_clear (r->tmp);
+
+
                 }
             }
         }
-        Printf (infoLong, "\n");
+        //Printf (info, "\n\n");
         //vset_reorder (domain);
+        all_done = true;
+        for (int i = 0; i < nGrps; i++) {
+            //vset_copy(X_r[i], Q_r[i]);
+            //vset_minus   (Q_r[i], V_r[i]);
+            //vset_count_info(Q_r[i], i, level);
+            all_done &= vset_is_empty (Q_r[i]);
+            //vset_copy   (Q_r[i], X_r[i]);
+            //vset_clear(X_r[i]);
+        }
+        if (level >= 30) {
+            all_done = true;
+        }
 
     } while (!all_done);
 
-    vset_clear(states);
-    vset_union(states, V_r[0]);
+    int i = 0;
+    vset_count_info(V_r[0], 0, level);
+    vset_enum    (V_r[0], print_state_r, &i);
 
-    for (int i = 1; i < nGrps; i++) {
-        vset_intersect(states, V_r[i]);
+    i = 20;
+    vset_count_info(V_r[20], 20, level);
+    vset_enum    (V_r[20], print_state_r, &i);
 
+    i = 40;
+    vset_count_info(V_r[40], 40, level);
+    vset_enum    (V_r[40], print_state_r, &i);
+
+    Warning(info, "Final states: ");
+    for (int i = 0; i < nGrps; i++) {
+        vset_count_info(V_r[i], i, level);
+//        vset_enum    (V_r[i], print_state_r, &i);
     }
-    vset_count_info(states, level);
 
-    Warning(info, "Checking invariants");
-    vset_t unsafe = vset_create (domain, inv_proj[0]->count, inv_proj[0]->data);
 
-    Warning(info, "Finding counter-examples");
-    find_counter_examples(states, unsafe);
+//    vset_clear(states);
+//    for (int i = 0; i < nGrps; i++) {
+//        vset_union(states, V_r[i]);
+//    }
+//
+//    for (int i = 0; i < nGrps; i++) {
+//        vset_count_info(V_r[i], i, level);
+//        vset_intersect(states, V_r[i]);
+//    }
+//    Warning(info, "Total full states: ");
+//    vset_count_info(states, -1, level);
 
-    vset_t U = vset_create(domain, -1, NULL);
 
-    vset_union(U, unsafe);
-
-    vset_destroy(unsafe);
+//    Warning(info, "Checking invariants");
+//    vset_t unsafe = vset_create (domain, inv_proj[0]->count, inv_proj[0]->data);
+//
+//    Warning(info, "Finding counter-examples");
+//    find_counter_examples(states, unsafe);
+//
+//    vset_t U = vset_create(domain, -1, NULL);
+//
+//    vset_union(U, unsafe);
+//
+//    vset_destroy(unsafe);
 
     //Warning(info, "Running PDR");
     //reach_pdr(I, U, states, level);
