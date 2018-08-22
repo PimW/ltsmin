@@ -44,12 +44,16 @@ again:
 					fi
 				od;
 #endif
-				j++
+				if
+				:: (j < N) -> j++
+				fi
 			:: else  ->
 				break
 			fi
 		od;
-		k++
+		if
+		:: (k < N) -> k++
+		fi		
 	:: else ->	/* survived all n-1 rounds */
 		break
 	od;
