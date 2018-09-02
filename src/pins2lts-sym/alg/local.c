@@ -44,6 +44,8 @@
 /**
  * TODO:
  * [ ] Learn only new transitions (rest transition relation)
+ *    [ ] Project to the union of read and write projections
+ *    [ ] Improve next-state function to allow different projections
  * [ ] Restrict queue sets to the right program counter
  * [ ] Try grouping by process
  * [ ] Try group merging
@@ -108,12 +110,27 @@ static vset_t *exact_explored;     // visited write
 
 static vset_t *V_w;     // visited write
 static vset_t *Q_w;     // queue   write
+static vset_t *C_w;     // complement write
+
 static vset_t *V_r;     // visited read
 static vset_t *Q_r;     // queue   read
 static vset_t *X_r;     // temp    read
 static vset_t *Y_r;     // temp 2  read
+static vset_t *Z_r;     // temp 2  read
+static vset_t *C_r;     // complement write
+
 static vset_t *V_old_r;     // visited old
 static vset_t  X;
+
+// Sets for vset_next
+static vset_t source_set;
+static vset_t image_set;
+static vset_t initial_set;
+
+// Complement projections
+ci_list **r_compl_projs;
+ci_list **w_compl_projs;
+
 
 static ci_list **rrows;
 static ci_list **wrows;
@@ -282,7 +299,30 @@ reach_local (vset_t I, vset_t V)
         for (int i = 0; i < nGrps; i++) {
             //write_group_t      *wg = &writers[i];
             vset_clear   (Q_w[i]);
-            vset_enum    (Q_r[i], explore_cb, &i);
+
+            //Warning(info, "explicit next state");
+            // Explicit next state, learning transitions
+            vset_enum    (Z_r[i], explore_cb, &i);
+            //vset_enum    (Z_r[i], print_state_r, &i);
+            //Warning(info, "to:");
+            //vset_enum    (Q_w[i], print_state_w, &i);
+
+            //Warning(info, "symbolic next state");
+            // Symbolic next state
+            //vset_count_info(Q_r[i], i, level);
+            vset_join(source_set, Q_r[i], C_r[i]);
+
+            //vset_enum    (Q_r[i], print_state_r, &i);
+            //vset_count_info(source_set, i, level);
+            //Warning(info, "vset_next");
+            vset_next(image_set, source_set, group_next[i]);
+            vset_project(Q_w[i], image_set);
+            //vset_count_info(image_set, i, level);
+            //vset_enum    (Q_w[i], print_state_w, &i);
+
+            //vset_count_info(Q_w[i], i, level);
+            //Warning(info, "project back");
+
             vset_union   (V_w[i], Q_w[i]);
 
             write_group_t *wg = &writers[i];
@@ -301,57 +341,16 @@ reach_local (vset_t I, vset_t V)
                 } else {
                     long n1, n2, n3, n4;
                     long double e1, e2, e3, e4;
-//                    Printf(info, "r->tmp: [");
-//                    for (int *s = ci_begin(r->slots); s < ci_end(r->slots); s++) {
-//                        Printf (info, "%2d,", *s);
-//                    }
-//                    Printf (info, "]  ");
-//                    Printf(info, "r->compl: [");
-//                    for (int *s = ci_begin(r->compl); s < ci_end(r->compl); s++) {
-//                        Printf (info, "%2d,", *s);
-//                    }
-//                    Printf (info, "]  ");
-//                    Printf(info, "Q_w[%d]:  [", i);
-//                    for (int *s = ci_begin(w_projs[i]); s < ci_end(w_projs[i]); s++) {
-//                        Printf (info, "%2d,", *s);
-//                    }
-//                    Printf (info, "]  ");
-//                    Printf(info, "V_r[%d]: [", j);
-//                    for (int *s = ci_begin(r_projs[j]); s < ci_end(r_projs[j]); s++) {
-//                        Printf (info, "%2d,", *s);
-//                    }
-//                    Printf (info, "]\n");
-//
-//
-//                    Warning(info, "Write projected queue:");
-//                    vset_project(Q_w[i], Q_w[i]);
-//                    vset_enum    (Q_w[i], print_state_w, &i);
-//                    Warning(info, "Read projected visited:");
-//                    vset_enum    (V_r[j], print_state_r, &j);
 
-
-                    vset_project(r->tmp, V_w[i]); // r_j w_i (Post(Q_r[i]))
+                    vset_project(r->tmp, Q_w[i]); // r_j w_i (Post(Q_r[i]))
                     vset_count_fn (r->tmp, &n1, &e1);
                     if (e1 != 0) {
                         vset_project        (r->complement, V_r[j]);    // r_j -w_i (V_r[i])
-                        //vset_project(X_r[j], r->complement);
+
                         vset_join (X_r[j], r->complement, r->tmp);
-//                        vset_count_fn (r->tmp, &n1, &e1);
-//                        vset_count_fn (r->complement, &n2, &e2);
-//                        vset_count_fn (X_r[j], &n3, &e3);
-                        //vset_minus          (X_r[j],        V_r[j]);
-//                        vset_count_fn (X_r[j], &n4, &e4);
-//                        if (e4 > 0) {
-//                            vset_enum(X_r[j], print_state_r, &j);
-//                            Warning (infoLong, "%.0Lf X %.0Lf =%s= %.0Lf --> %.0Lf\t\t%d>%d", e1, e2, e1 * e2 == e3 ? "=" : "!", e3, e4, i, j);
-//                        }
+
                         vset_union          (Y_r[j],        X_r[j]);
-                        //all_done &= vset_is_empty (X_r[j]);
-//                        Warning(info, "Read projected new:");
-//                        vset_enum    (X_r[j], print_state_r, &j);
-//                        if (!vset_is_empty(X_r[j])) {
-//                            Warning(info, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-//                        }
+
                         vset_clear (X_r[j]);
                         vset_clear (r->complement);
                     }
@@ -365,77 +364,37 @@ reach_local (vset_t I, vset_t V)
         //vset_reorder (domain);
         all_done = true;
         for (int i = 0; i < nGrps; i++) {
-            //vset_copy(X_r[i], Q_r[i]);
             vset_clear(Q_r[i]);
             vset_copy(Q_r[i], Y_r[i]);
+            vset_copy(Z_r[i], Y_r[i]);
 
-            vset_minus(Y_r[i], V_r[i]);
-            //vset_count_info(Y_r[i], i, level);
             vset_clear(Y_r[i]);
+            //vset_minus(Y_r[i], V_r[i]);
+
+            //vset_clear(Y_r[i]);
+            //vset_copy(Y_r[i], Q_r[i]);
+            if (level > 1) {
+                vset_minus(Z_r[i], V_r[i]);
+            }
+            //vset_count_info(X_r[i], i, level);
 
             vset_union(V_r[i], Q_r[i]);
-            //vset_minus(Q_r[i], V_r[i]);
 
-            //vset_count_info(Q_r[i], i, level);
-            //all_done &= vset_is_empty (Q_r[i]);
             all_done &= vset_equal (V_old_r[i], V_r[i]);
             vset_copy(V_old_r[i], V_r[i]);
-            //vset_copy   (Q_r[i], X_r[i]);
-            //vset_clear(X_r[i]);
+
+
         }
-        //int * j_indices = 2;
-//        if (level % 10 == 0) {
-//            Warning(info, "checking j values");
-//            //vset_count_info(V_r[1], 1, level);
-//            int group_index = 10;
-//            vset_enum(V_r[10], print_state_r, &group_index);
-//            group_index = 25;
-//            vset_enum(V_r[25], print_state_r, &group_index);
-//            group_index = 40;
-//            vset_enum(V_r[40], print_state_r, &group_index);
-//        }
+
     } while (!all_done);
 
-//    int i = 0;
-//    vset_count_info(V_r[0], 0, level);
-//    vset_enum    (V_r[0], print_state_r, &i);
-//
-//    i = 20;
-//    vset_count_info(V_r[20], 20, level);
-//    vset_enum    (V_r[20], print_state_r, &i);
-//
-//    i = 40;
-//    vset_count_info(V_r[40], 40, level);
-//    vset_enum    (V_r[40], print_state_r, &i);
 
     Warning(info, "Final states: ");
     for (int i = 0; i < nGrps; i++) {
-        vset_count_info(V_r[i], i, level);
-//        vset_enum    (V_r[i], print_state_r, &i);
+        vset_count_info(V_r[i], i, level);;
     }
 
-//    for (int i = 0; i < nGrps; i++) {
-//        vset_count_info(exact_explored[i], i, level);
-//        if (i == 10) {
-//            vset_enum(exact_explored[i], print_state_r, &i);
-//            Warning(info, "exact reach is not a subset of approx reach");
-//            vset_count_info(V_r[i], i, level);
-//            //vset_enum(V_r[i], print_state_r, &i);
-//            //exit(0);
-//        }
-////        vset_count_info(V_r[i], i, level);
-//        vset_minus(exact_explored[i], V_r[i]);
-//        vset_count_info(exact_explored[i], i, level);
-//        int is_subset = vset_is_empty(exact_explored[i]);
-//        if (!is_subset && i == 10) {
-//            vset_enum(exact_explored[i], print_state_r, &i);
-//            Warning(info, "exact reach is not a subset of approx reach");
-//            vset_count_info(V_r[i], i, level);
-//            //vset_enum(V_r[i], print_state_r, &i);
-//            //exit(0);
-//        }
-//        Warning(info, "--");
-//    }
+    Warning(info, "Next state called %d times!", explored)
 
 //    vset_clear(states);
 //    for (int i = 0; i < nGrps; i++) {
@@ -592,28 +551,66 @@ init_local (vset_t I)
         exact_explored = RTmalloc(nGrps * sizeof(vset_t));
         V_w = RTmalloc(nGrps * sizeof(vset_t));
         Q_w = RTmalloc(nGrps * sizeof(vset_t));
+        C_w = RTmalloc(nGrps * sizeof(vset_t));
         X_r = RTmalloc(nGrps * sizeof(vset_t));
         Y_r = RTmalloc(nGrps * sizeof(vset_t));
+        Z_r = RTmalloc(nGrps * sizeof(vset_t));
+        C_r = RTmalloc(nGrps * sizeof(vset_t));
         V_old_r = RTmalloc(nGrps * sizeof(vset_t));
+
+        // TODO: move to projections
+        r_compl_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
+        w_compl_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
+
         for (int i = 0; i < nGrps; i++) {
+            // Store complement sets for read projections
+            r_compl_projs[i] = ci_create (N - ci_count(r_projs[i]));
+            for (int l = 0; l < N; l++) {
+                ci_add_if (r_compl_projs[i], l, ci_binary_search(r_projs[i], l) == -1);
+            }
+
+            // Store complement sets for read projections
+            w_compl_projs[i] = ci_create (N - ci_count(w_projs[i]));
+            for (int l = 0; l < N; l++) {
+                ci_add_if (w_compl_projs[i], l, ci_binary_search(w_projs[i], l) == -1);
+            }
+
             exact_explored[i] = vset_create(domain, r_projs[i]->count, r_projs[i]->data);
             vset_copy(exact_explored[i], group_explored[i]);
             V_w[i] = vset_create (domain, w_projs[i]->count, w_projs[i]->data);
             Q_w[i] = vset_create (domain, w_projs[i]->count, w_projs[i]->data);
+            C_w[i] = vset_create (domain, w_compl_projs[i]->count, w_compl_projs[i]->data);
+
             X_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
             Y_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
+            Z_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
+            C_r[i] = vset_create (domain, r_compl_projs[i]->count, r_compl_projs[i]->data);
             V_old_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
 
             vset_project (Q_r[i], I);       // init read queue
-            vset_copy    (V_r[i], Q_r[i]);
+
+            vset_copy    (V_r[i], Q_r[i]);  // todo: if no chaining?
             vset_project (V_w[i], I);       // init write visited
+
+            vset_project(C_r[i], I);
+            vset_project(C_w[i], I);
+
+
+
         }
+
+        source_set = vset_create(domain, -1, NULL);
+        image_set = vset_create(domain, -1, NULL);
 
         p_all = ci_create (N);
         for (int l = 0; l < N; l++) ci_set (p_all, l, l);
 
         find_domain_intersections ();
+
+
     }
+
+
 
     HREbarrier (HREglobal());
 }

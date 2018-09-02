@@ -491,7 +491,7 @@ static void actual_main(void *arg)
 
     /* check the invariants at level 0 */
     check_invariants(visited, 0);
-    
+
     if (local) {
         run_local (initial, visited);
     } else {
