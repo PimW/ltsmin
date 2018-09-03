@@ -116,8 +116,9 @@ static vset_t *V_r;     // visited read
 static vset_t *Q_r;     // queue   read
 static vset_t *X_r;     // temp    read
 static vset_t *Y_r;     // temp 2  read
-static vset_t *Z_r;     // temp 2  read
-static vset_t *C_r;     // complement write
+
+static vset_t *N_r;     // new transitions
+static vset_t *C_r;     // complement write set
 
 static vset_t *V_old_r;     // visited old
 static vset_t  X;
@@ -284,106 +285,211 @@ static void vset_count_info(vset_t set, int group,  int level)
     Warning (info, "level: %ld\t\t group: %ld\t\t nodes: %ld\t\t states: %.0Lf", level, group, count, el);
 }
 
+/**
+ * Assumes
+ */
+static void learn_new_transitions_for_group (int i)
+{
+    vset_enum    (N_r[i], explore_cb, &i);
+}
+
+static void apply_transition_relation_to_group (int i)
+{
+    vset_join    (source_set, Q_r[i], C_r[i]);
+    vset_next    (image_set, source_set, group_next[i]);
+    vset_project (Q_w[i], image_set);
+}
+
+static void recombine_new_states_for_group (int i)
+{
+    write_group_t *wg = &writers[i];
+    for (reader_t *r = r_bgn(wg); r <  r_end(wg); r++) {
+        int j = r->index;
+        if (r->tmp == NULL) { // writer's domain overlaps reader
+            vset_project (X_r[j], Q_w[i]);
+            //vset_minus   (X_r[j], V_r[j]);
+            long n1;
+            long double e1;
+            vset_count_fn (X_r[j], &n1, &e1);
+            if (e1 > 0)
+            Warning (infoLong, "_ X _ === _ --> %.0Lf\t\t%d>%d", e1, i, j);
+            vset_union   (Y_r[j], X_r[j]);
+            vset_clear   (X_r[j]);
+        } else {
+            long n1, n2, n3, n4;
+            long double e1, e2, e3, e4;
+
+            vset_project(r->tmp, Q_w[i]); // r_j w_i (Post(Q_r[i]))
+            vset_count_fn (r->tmp, &n1, &e1);
+            if (e1 != 0) {
+                vset_project        (r->complement, V_r[j]);    // r_j -w_i (V_r[i])
+
+                vset_join (X_r[j], r->complement, r->tmp);
+
+                vset_union          (Y_r[j],        X_r[j]);
+
+                vset_clear (X_r[j]);
+                vset_clear (r->complement);
+            }
+            vset_clear (r->tmp);
+        }
+    }
+}
+
+int reach_local_sat(vset_t I, vset_t V)
+{
+    Warning(info, "Using saturation");
+    int                 level = 0;
+    bool                all_done;
+
+    do { // while \exists_i \in [1..K] : Q^r_i != 0 do
+        level++;
+        all_done = true;
+
+        Warning(info, "Approx Reach level: %d", level);
+        for (int i = 0; i < nGrps; i++) {
+            //write_group_t      *wg = &writers[i];
+            while (true) {
+                vset_clear   (Q_w[i]);
+
+                learn_new_transitions_for_group(i);
+
+                apply_transition_relation_to_group(i);
+
+                recombine_new_states_for_group(i);
+
+                if (vset_is_empty(Y_r[i])) {
+                    break;
+                }
+
+                vset_clear(Q_r[i]);
+                vset_copy(Q_r[i], Y_r[i]);
+                vset_copy(N_r[i], Y_r[i]);
+
+                vset_clear(Y_r[i]);
+
+                vset_minus(N_r[i], V_r[i]);
+                vset_union(V_r[i], Q_r[i]);
+
+                all_done &= vset_equal (V_old_r[i], V_r[i]);
+                vset_copy(V_old_r[i], V_r[i]);
+            }
+
+        }
+
+        //vset_reorder (domain);
+
+    } while (!all_done);
+
+
+    Warning(info, "Final states: ");
+    for (int i = 0; i < nGrps; i++) {
+        vset_count_info(V_r[i], i, level);;
+    }
+
+    Warning(info, "Next state called %d times!", explored)
+    
+    return level;
+    (void) V;
+}
+
+
 int
 reach_local (vset_t I, vset_t V)
 {
     int                 level = 0;
     bool                all_done;
 
-    vset_t states = vset_create (domain, -1, NULL);
-    vset_t tmp = vset_create (domain, -1, NULL);
-
     do { // while \exists_i \in [1..K] : Q^r_i != 0 do
         level++;
+        all_done = true;
+
         Warning(info, "Approx Reach level: %d", level);
         for (int i = 0; i < nGrps; i++) {
             //write_group_t      *wg = &writers[i];
             vset_clear   (Q_w[i]);
 
-            //Warning(info, "explicit next state");
-            // Explicit next state, learning transitions
-            vset_enum    (Z_r[i], explore_cb, &i);
-            //vset_enum    (Z_r[i], print_state_r, &i);
-            //Warning(info, "to:");
-            //vset_enum    (Q_w[i], print_state_w, &i);
+            learn_new_transitions_for_group(i);
 
-            //Warning(info, "symbolic next state");
-            // Symbolic next state
-            //vset_count_info(Q_r[i], i, level);
-            vset_join(source_set, Q_r[i], C_r[i]);
+            apply_transition_relation_to_group(i);
 
-            //vset_enum    (Q_r[i], print_state_r, &i);
-            //vset_count_info(source_set, i, level);
-            //Warning(info, "vset_next");
-            vset_next(image_set, source_set, group_next[i]);
-            vset_project(Q_w[i], image_set);
-            //vset_count_info(image_set, i, level);
-            //vset_enum    (Q_w[i], print_state_w, &i);
+            recombine_new_states_for_group(i);
 
-            //vset_count_info(Q_w[i], i, level);
-            //Warning(info, "project back");
+            if (strategy == CHAIN || strategy == CHAIN_P) {
+                for (int j = i + 1; j < nGrps; j++) {       // don't add states for already used groups
+                    vset_union(Q_r[j], Y_r[j]);             // N_r[j] is always a subset of Q_r[j]
 
-            vset_union   (V_w[i], Q_w[i]);
+                    vset_minus(Y_r[j], V_r[j]);
+                    vset_union(N_r[j], Y_r[j]);
 
-            write_group_t *wg = &writers[i];
-            for (reader_t *r = r_bgn(wg); r <  r_end(wg); r++) {
-                int j = r->index;
-                if (r->tmp == NULL) { // writer's domain overlaps reader
-                    vset_project (X_r[j], V_w[i]);
-                    //vset_minus   (X_r[j], V_r[j]);
-                    long n1;
-                    long double e1;
-                    vset_count_fn (X_r[j], &n1, &e1);
-                    if (e1 > 0)
-                    Warning (infoLong, "_ X _ === _ --> %.0Lf\t\t%d>%d", e1, i, j);
-                    vset_union   (Y_r[j], X_r[j]);
-                    vset_clear   (X_r[j]);
-                } else {
-                    long n1, n2, n3, n4;
-                    long double e1, e2, e3, e4;
 
-                    vset_project(r->tmp, Q_w[i]); // r_j w_i (Post(Q_r[i]))
-                    vset_count_fn (r->tmp, &n1, &e1);
-                    if (e1 != 0) {
-                        vset_project        (r->complement, V_r[j]);    // r_j -w_i (V_r[i])
 
-                        vset_join (X_r[j], r->complement, r->tmp);
-
-                        vset_union          (Y_r[j],        X_r[j]);
-
-                        vset_clear (X_r[j]);
-                        vset_clear (r->complement);
-                    }
-                    vset_clear (r->tmp);
+                    vset_union(V_r[j], Q_r[j]);  // Q_r[j] hasn't changed
                 }
             }
+/*
+//            vset_enum    (N_r[i], explore_cb, &i);
+//
+//            vset_join(source_set, Q_r[i], C_r[i]);
+//
+//            vset_next(image_set, source_set, group_next[i]);
+//            vset_project(Q_w[i], image_set);
+
+            //vset_union   (V_w[i], Q_w[i]);
+
+//            write_group_t *wg = &writers[i];
+//            for (reader_t *r = r_bgn(wg); r <  r_end(wg); r++) {
+//                int j = r->index;
+//                if (r->tmp == NULL) { // writer's domain overlaps reader
+//                    vset_project (X_r[j], Q_w[i]);
+//                    //vset_minus   (X_r[j], V_r[j]);
+//                    long n1;
+//                    long double e1;
+//                    vset_count_fn (X_r[j], &n1, &e1);
+//                    if (e1 > 0)
+//                    Warning (infoLong, "_ X _ === _ --> %.0Lf\t\t%d>%d", e1, i, j);
+//                    vset_union   (Y_r[j], X_r[j]);
+//                    vset_clear   (X_r[j]);
+//                } else {
+//                    long n1, n2, n3, n4;
+//                    long double e1, e2, e3, e4;
+//
+//                    vset_project(r->tmp, Q_w[i]); // r_j w_i (Post(Q_r[i]))
+//                    vset_count_fn (r->tmp, &n1, &e1);
+//                    if (e1 != 0) {
+//                        vset_project        (r->complement, V_r[j]);    // r_j -w_i (V_r[i])
+//
+//                        vset_join (X_r[j], r->complement, r->tmp);
+//
+//                        vset_union          (Y_r[j],        X_r[j]);
+//
+//                        vset_clear (X_r[j]);
+//                        vset_clear (r->complement);
+//                    }
+//                    vset_clear (r->tmp);
+//                }
+//            } */
         }
 
-
-        //Printf (info, "\n\n");
         //vset_reorder (domain);
-        all_done = true;
+
         for (int i = 0; i < nGrps; i++) {
             vset_clear(Q_r[i]);
             vset_copy(Q_r[i], Y_r[i]);
-            vset_copy(Z_r[i], Y_r[i]);
+            vset_copy(N_r[i], Y_r[i]);
 
             vset_clear(Y_r[i]);
-            //vset_minus(Y_r[i], V_r[i]);
 
-            //vset_clear(Y_r[i]);
-            //vset_copy(Y_r[i], Q_r[i]);
-            if (level > 1) {
-                vset_minus(Z_r[i], V_r[i]);
-            }
-            //vset_count_info(X_r[i], i, level);
-
+            vset_minus(N_r[i], V_r[i]);
             vset_union(V_r[i], Q_r[i]);
+
+            if (strategy != BFS_P && strategy != CHAIN_P) {
+                //Warning(info, "Using full visited state set");
+                vset_copy(Q_r[i], V_r[i]);
+            }
 
             all_done &= vset_equal (V_old_r[i], V_r[i]);
             vset_copy(V_old_r[i], V_r[i]);
-
-
         }
 
     } while (!all_done);
@@ -554,7 +660,7 @@ init_local (vset_t I)
         C_w = RTmalloc(nGrps * sizeof(vset_t));
         X_r = RTmalloc(nGrps * sizeof(vset_t));
         Y_r = RTmalloc(nGrps * sizeof(vset_t));
-        Z_r = RTmalloc(nGrps * sizeof(vset_t));
+        N_r = RTmalloc(nGrps * sizeof(vset_t));
         C_r = RTmalloc(nGrps * sizeof(vset_t));
         V_old_r = RTmalloc(nGrps * sizeof(vset_t));
 
@@ -583,13 +689,14 @@ init_local (vset_t I)
 
             X_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
             Y_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
-            Z_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
+            N_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
             C_r[i] = vset_create (domain, r_compl_projs[i]->count, r_compl_projs[i]->data);
             V_old_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
 
             vset_project (Q_r[i], I);       // init read queue
 
             vset_copy    (V_r[i], Q_r[i]);  // todo: if no chaining?
+            vset_copy    (N_r[i], Q_r[i]);
             vset_project (V_w[i], I);       // init write visited
 
             vset_project(C_r[i], I);
@@ -672,8 +779,15 @@ run_local (vset_t I, vset_t V)
 
     init_local (I);
 
+    int level;
+
     RTstartTimer(reach_timer);
-    int level = reach_local (I, V);
+    if (sat_strategy == SAT) {
+        level = reach_local_sat(I, V);
+    } else {
+        level = reach_local (I, V);
+    }
+
     RTstopTimer(reach_timer);
 
     print_local (V, level);
