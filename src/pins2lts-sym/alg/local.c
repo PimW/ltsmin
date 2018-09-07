@@ -300,9 +300,8 @@ static void apply_transition_relation_to_group (int i)
     vset_project (Q_w[i], image_set);
 }
 
-static bool recombine_new_states_for_group (int i)
+static void recombine_new_states_for_group (int i)
 {
-    bool fanout = false;
     write_group_t *wg = &writers[i];
     for (reader_t *r = r_bgn(wg); r <  r_end(wg); r++) {
         int j = r->index;
@@ -314,7 +313,7 @@ static bool recombine_new_states_for_group (int i)
             vset_count_fn (X_r[j], &n1, &e1);
             if (e1 > 0)
             Warning (infoLong, "_ X _ === _ --> %.0Lf\t\t%d>%d", e1, i, j);
-            fanout |= !vset_is_empty(X_r[j]);
+
             vset_union   (Y_r[j], X_r[j]);
             vset_clear   (X_r[j]);
         } else {
@@ -328,7 +327,6 @@ static bool recombine_new_states_for_group (int i)
 
                 vset_join (X_r[j], r->complement, r->tmp);
 
-                fanout |= !vset_is_empty(X_r[j]);
                 vset_union          (Y_r[j],        X_r[j]);
 
                 vset_clear (X_r[j]);
@@ -337,7 +335,6 @@ static bool recombine_new_states_for_group (int i)
             vset_clear (r->tmp);
         }
     }
-    return fanout;
 }
 
 void add_states_from_group_to_group(int i, int dest)
@@ -398,56 +395,24 @@ int reach_local_sat(vset_t I, vset_t V)
 
 
             while (true) {
-                //all_done &= vset_is_empty(N_r[i]);
 
                 learn_new_transitions_for_group(i);
                 vset_union(V_w[i], Q_w[i]);
 
                 apply_transition_relation_to_group(i);
 
-                //recombine_new_states_for_group(i);
+                //vrel_t rels[1] = {group_next[i]};
 
+//                vset_t tmp = vset_create(domain, w_projs[i]->count, w_projs[i]->data);
+//                vset_count_info(Q_w[i], i, level);
+//                vset_least_fixpoint(tmp, Q_w[i], rels, 1);
+//                vset_union(Q_w[i], tmp);
+//                vset_count_info(Q_w[i], i, level);
 
                 // Add new states only for group i
                 add_states_from_group_to_group(i, i);
-                /*
-//                write_group_t *wg = &writers[i];
-//                for (reader_t *r = r_bgn(wg); r <  r_end(wg); r++) {
-//                    int j = r->index;
-//                    if (j == i) {
-//                        if (r->tmp == NULL) { // writer's domain overlaps reader
-//                            vset_project (X_r[j], Q_w[i]);
-//                            //vset_minus   (X_r[j], V_r[j]);
-//                            long n1;
-//                            long double e1;
-//                            vset_count_fn (X_r[j], &n1, &e1);
-//                            if (e1 > 0)
-//                            Warning (infoLong, "_ X _ === _ --> %.0Lf\t\t%d>%d", e1, i, j);
-//                            vset_union   (Y_r[j], X_r[j]);
-//                            vset_clear   (X_r[j]);
-//                        } else {
-//                            long n1, n2, n3, n4;
-//                            long double e1, e2, e3, e4;
-//
-//                            vset_project(r->tmp, Q_w[i]); // r_j w_i (Post(Q_r[i]))
-//                            vset_count_fn (r->tmp, &n1, &e1);
-//                            if (e1 != 0) {
-//                                vset_project        (r->complement, V_r[j]);    // r_j -w_i (V_r[i])
-//
-//                                vset_join (X_r[j], r->complement, r->tmp);
-//
-//                                vset_union          (Y_r[j],        X_r[j]);
-//
-//                                vset_clear (X_r[j]);
-//                                vset_clear (r->complement);
-//                            }
-//                            vset_clear (r->tmp);
-//                        }
-//                    }
-//
-//
-//                }
-                 */
+
+
 
                 if (vset_is_empty(Y_r[i])) {
                     break;
@@ -462,9 +427,6 @@ int reach_local_sat(vset_t I, vset_t V)
 
                 vset_minus(N_r[i], V_r[i]);
                 vset_union(V_r[i], Q_r[i]);
-
-                //all_done &= vset_equal (V_old_r[i], V_r[i]);
-                //all_done &= vset_is_empty(Q_w[i]);
 
             }
 
