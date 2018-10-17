@@ -378,97 +378,38 @@ void add_states_from_group_to_group(int i, int dest)
     }
 }
 
-int reach_local_sat(vset_t I, vset_t V)
+void
+compute_full_states(vset_t total_states)
 {
-    Warning(info, "Using saturation");
-    int                 level = 0;
-    bool                all_done;
+    ci_list *combined_projection = ci_create(0);
 
-    do { // while \exists_i \in [1..K] : Q^r_i != 0 do
-        level++;
-        all_done = true;
+    ci_union(combined_projection, r_projs[0]);
 
-        Warning(info, "Approx Reach level: %d", level);
-        for (int i = 0; i < nGrps; i++) {
-            //write_group_t      *wg = &writers[i];
-            vset_clear   (Q_w[i]);
-            vset_clear   (V_w[i]);
+    Warning(info, "Computing full states...");
 
 
-            while (true) {
+    vset_t states = vset_create(domain, combined_projection->count, combined_projection->data);
+    vset_copy(states, V_r[0]);
 
-                learn_new_transitions_for_group(i);
-                vset_union(V_w[i], Q_w[i]);
+    vset_t tmp;
 
-                apply_transition_relation_to_group(i);
+    for(int i = 1; i <nGrps; i++) {
+        ci_union(combined_projection, r_projs[i]);
 
-                //vrel_t rels[1] = {group_next[i]};
+        tmp = vset_create(domain, combined_projection->count, combined_projection->data);
+        vset_join(tmp, states, V_r[i]);
 
-//                vset_t tmp = vset_create(domain, w_projs[i]->count, w_projs[i]->data);
-//                vset_count_info(Q_w[i], i, level);
-//                vset_least_fixpoint(tmp, Q_w[i], rels, 1);
-//                vset_union(Q_w[i], tmp);
-//                vset_count_info(Q_w[i], i, level);
+        vset_clear(states);
+        states = vset_create(domain, combined_projection->count, combined_projection->data);
+        vset_copy(states, tmp);
 
-                // Add new states only for group i
-                add_states_from_group_to_group(i, i);
-
-
-
-                if (vset_is_empty(Y_r[i])) {
-                    break;
-                }
-
-                vset_clear(Q_r[i]);
-                vset_clear(N_r[i]);
-                vset_copy(Q_r[i], Y_r[i]);
-                vset_copy(N_r[i], Y_r[i]);
-
-                vset_clear(Y_r[i]);
-
-                vset_minus(N_r[i], V_r[i]);
-                vset_union(V_r[i], Q_r[i]);
-
-            }
-
-            vset_copy(V_old_r[i], V_r[i]);
-
-            vset_copy(Q_w[i], V_w[i]);
-
-            // Add new states for all groups at the end to make sure we only have to recombine once.
-            recombine_new_states_for_group(i);
-
-            for (int j = 0; j < nGrps; j++) {
-                vset_union(Q_r[j], Y_r[j]);// N_r[j] is always a subset of Q_r[j]
-
-                //all_done &= vset_is_empty(Y_r[j]);
-
-                vset_minus(Y_r[j], V_r[j]);
-                vset_union(N_r[j], Y_r[j]);
-                //all_done &= vset_is_empty(N_r[j]);
-            }
-            for (int j = 0; j < nGrps; j++) {
-                all_done &= vset_is_empty (N_r[j]);
-            }
-
-        }
-
-        //vset_reorder (domain);
-
-    } while (!all_done);
-
-
-    Warning(info, "Final states: ");
-    for (int i = 0; i < nGrps; i++) {
-        vset_count_info(V_r[i], i, level);;
+        vset_destroy(tmp);
     }
 
-    Warning(info, "Next state called %d times!", explored)
-    
-    return level;
-    (void) V;
-}
+    vset_join(total_states, states, states);
 
+    vset_destroy(states);
+}
 
 int
 reach_local (vset_t I, vset_t V)
@@ -535,6 +476,11 @@ reach_local (vset_t I, vset_t V)
     Warning(info, "Next state called %d times!", explored)
 
 
+    vset_t total_states = vset_create(domain, -1, NULL);
+
+    compute_full_states(total_states);
+
+    vset_count_info(total_states, -1, level);
 
 //    vset_clear(states);
 //    for (int i = 0; i < nGrps; i++) {
@@ -819,7 +765,7 @@ run_local (vset_t I, vset_t V)
 
     RTstartTimer(reach_timer);
     if (sat_strategy == SAT) {
-        level = reach_local_sat(I, V);
+        Abort("Local reach does not support saturation");
     } else {
         level = reach_local (I, V);
     }
