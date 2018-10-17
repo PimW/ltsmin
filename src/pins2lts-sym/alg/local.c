@@ -35,6 +35,7 @@
 
 
 #include <time.h>
+#include <fcntl.h>
 
 
 
@@ -43,15 +44,15 @@
 
 /**
  * TODO:
- * [ ] Learn only new transitions (rest transition relation)
+ * [x] Learn only new transitions (rest transition relation)
  *    [ ] Project to the union of read and write projections
  *    [ ] Improve next-state function to allow different projections
  * [ ] Restrict queue sets to the right program counter
  * [ ] Try grouping by process
  * [ ] Try group merging
- * [ ] Chaining
- * [ ] Saturation
- * [ ] Full visited sets vs. New level
+ * [x] Chaining
+ * [-] Saturation
+ * [x] Full visited sets vs. New level
  */
 
 
@@ -500,48 +501,6 @@ reach_local (vset_t I, vset_t V)
                     vset_union(V_r[j], Q_r[j]);  // Q_r[j] hasn't changed
                 }
             }
-/*
-//            vset_enum    (N_r[i], explore_cb, &i);
-//
-//            vset_join(source_set, Q_r[i], C_r[i]);
-//
-//            vset_next(image_set, source_set, group_next[i]);
-//            vset_project(Q_w[i], image_set);
-
-            //vset_union   (V_w[i], Q_w[i]);
-
-//            write_group_t *wg = &writers[i];
-//            for (reader_t *r = r_bgn(wg); r <  r_end(wg); r++) {
-//                int j = r->index;
-//                if (r->tmp == NULL) { // writer's domain overlaps reader
-//                    vset_project (X_r[j], Q_w[i]);
-//                    //vset_minus   (X_r[j], V_r[j]);
-//                    long n1;
-//                    long double e1;
-//                    vset_count_fn (X_r[j], &n1, &e1);
-//                    if (e1 > 0)
-//                    Warning (infoLong, "_ X _ === _ --> %.0Lf\t\t%d>%d", e1, i, j);
-//                    vset_union   (Y_r[j], X_r[j]);
-//                    vset_clear   (X_r[j]);
-//                } else {
-//                    long n1, n2, n3, n4;
-//                    long double e1, e2, e3, e4;
-//
-//                    vset_project(r->tmp, Q_w[i]); // r_j w_i (Post(Q_r[i]))
-//                    vset_count_fn (r->tmp, &n1, &e1);
-//                    if (e1 != 0) {
-//                        vset_project        (r->complement, V_r[j]);    // r_j -w_i (V_r[i])
-//
-//                        vset_join (X_r[j], r->complement, r->tmp);
-//
-//                        vset_union          (Y_r[j],        X_r[j]);
-//
-//                        vset_clear (X_r[j]);
-//                        vset_clear (r->complement);
-//                    }
-//                    vset_clear (r->tmp);
-//                }
-//            } */
         }
 
         //vset_reorder (domain);
@@ -567,13 +526,15 @@ reach_local (vset_t I, vset_t V)
 
     } while (!all_done);
 
+        Warning(info, "Final states: ");
 
-    Warning(info, "Final states: ");
     for (int i = 0; i < nGrps; i++) {
-        vset_count_info(V_r[i], i, level);;
+        vset_count_info(V_r[i], i, level);
     }
 
     Warning(info, "Next state called %d times!", explored)
+
+
 
 //    vset_clear(states);
 //    for (int i = 0; i < nGrps; i++) {
@@ -605,6 +566,8 @@ reach_local (vset_t I, vset_t V)
 
 //    Warning(info, "Traditional invariant check");
 //    check_invariants(states, level);
+
+    //print_bdd(group_next[0]->bdd);
 
     return level;
     (void) V;
