@@ -171,6 +171,7 @@ init_domain(vset_implementation_t impl) {
     group_tmp      = (vset_t*)RTmalloc(nGrps * sizeof(vset_t));
     r_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
     w_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
+    total_proj     = (ci_list *)RTmalloc(sizeof(int) * N + 1);
 
     l_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[sLbls]));
     label_false    = (vset_t*)RTmalloc(sLbls * sizeof(vset_t));
@@ -231,6 +232,12 @@ init_domain(vset_implementation_t impl) {
             }
         }
     }
+
+    total_proj->count = N;
+    for (int i = 0; i < N; i++) {
+        ci_add(total_proj, i);
+    }
+
 
     l_projs = (ci_list **) dm_rows_to_idx_table (GBgetStateLabelInfo(model));
     for (int i = 0; i < sLbls; i++) {

@@ -134,6 +134,7 @@ extern int max_sat_levels;
 extern ci_list **r_projs;
 extern ci_list **w_projs;
 extern ci_list **l_projs;
+extern ci_list *total_proj;
 extern vdom_t domain;
 extern matrix_t *read_matrix;
 extern matrix_t *write_matrix;

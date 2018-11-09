@@ -378,10 +378,11 @@ void add_states_from_group_to_group(int i, int dest)
     }
 }
 
+// TODO: make sure everything works with the correct memory
 void
 compute_full_states(vset_t total_states)
 {
-    ci_list *combined_projection = ci_create(0);
+    ci_list *combined_projection = ci_create((size_t)N);
 
     ci_union(combined_projection, r_projs[0]);
 
@@ -475,25 +476,11 @@ reach_local (vset_t I, vset_t V)
 
     Warning(info, "Next state called %d times!", explored)
 
+    compute_full_states(V);
 
-    vset_t total_states = vset_create(domain, -1, NULL);
+    vset_count_info(V, -1, level);
 
-    compute_full_states(total_states);
-
-    vset_count_info(total_states, -1, level);
-
-//    vset_clear(states);
-//    for (int i = 0; i < nGrps; i++) {
-//        vset_union(states, V_r[i]);
-//    }
-//
-//    for (int i = 0; i < nGrps; i++) {
-//        vset_count_info(V_r[i], i, level);
-//        vset_intersect(states, V_r[i]);
-//    }
-//    Warning(info, "Total full states: ");
-//    vset_count_info(states, -1, level);
-
+    find_counter_examples();
 
 //    Warning(info, "Checking invariants");
 //    vset_t unsafe = vset_create (domain, inv_proj[0]->count, inv_proj[0]->data);

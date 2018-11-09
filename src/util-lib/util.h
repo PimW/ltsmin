@@ -108,6 +108,25 @@ ci_add (ci_list *list, int num)
     list->data[list->count++] = num;
 }
 
+/**
+ * Remove element from array based on value, assumes all elements are unique.
+ * Resizes the array. (does not de-allocate memory)
+ * @param list
+ * @param num
+ */
+static inline void
+ci_remove(ci_list *list, int num)
+{
+    int index = ci_find(list, num);
+
+    if (index == -1) return;
+
+    for (int a = index; a != *ci_end(list) - 1; a++) {
+        list->data[a] = list->data[a+1];
+    }
+    list->count--; // resize
+}
+
 static inline int
 ci_binary_search (ci_list *list, int key)
 {
@@ -133,9 +152,26 @@ ci_add_if (ci_list *list, int num, int condition)
     list->count += condition != 0;
 }
 
+static inline void
+ci_copy(ci_list *dst, ci_list *src)
+{
+    assert(dst->count >= src->count); // make sure we only write to allocated memory
+
+    ci_clear(dst);
+
+    for (int i = 0; i < src->count; i++) {
+        ci_add(dst, src->data[i]);
+    }
+}
+
 /**
  * An inefficient implementation of union on ci_lists it just adds all indices
  * that don't exist yet and then sorts the resulting array.
+ *
+ * Example:
+ *  input: dst = [1, 3, 5] and src = [2, 4]
+ *  output: dst = [1, 2, 3, 4, 5]
+ *
  * @param dst
  * @param src
  */
@@ -145,6 +181,56 @@ ci_union(ci_list *dst, ci_list *src)
     for (int *s = ci_begin(src); s < ci_end(src); s++)
         ci_add_if (dst, *s, ci_binary_search(dst, *s) == -1);
     ci_sort(dst);
+}
+
+/**
+ * Executes an array minus and removes values in src from dst.
+ * Assumes both arrays are unique and don't contain duplicate values
+ *
+ * Example:
+ *  input: dst = [1, 2, 3, 5] and src = [2, 4, 5]
+ *  output: dst = [1, 3]
+ *
+ * @param dst
+ * @param src
+ */
+static inline void
+ci_minus(ci_list *dst, ci_list *src)
+{
+    int i = 0;
+    int j = 0;
+
+    while (i < dst->count && j < src->count) {
+        if (dst->data[i] < src->data[j]) {
+            i++;
+        } else if (dst->data[i] > src->data[j]) {
+            j++;
+        } else { // dst->data[i] == src->data[j]
+            ci_remove(dst, i); // removes value and shrinks array
+            j++; // assuming all values are unique we don't have to check twice
+        }
+
+    }
+}
+
+/**
+ * Creates an inverted list for src, based on base.
+ * This requires src<=base and dst.count = base.count - src.count
+ *
+ * Example:
+ *  Input: src =  [1, 3, 5] and base = [1, 2, 3, 4, 5]
+ *  Output: dst = [2, 4]
+ *
+ * @param dst
+ * @param src
+ * @param base
+ */
+static inline void
+ci_invert(ci_list *dst, ci_list *src, ci_list *base)
+{
+    for (int *a = ci_begin(base); a != ci_end(base); a++) {
+        ci_add_if(dst, *a, ci_binary_search(src, *a) != -1);
+    }
 }
 
 static inline void
