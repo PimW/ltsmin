@@ -442,6 +442,10 @@ void vset_copy_match_proj(vset_t dst,vset_t src,int p_len,int* proj,int p_id,int
     }
 }
 
+void vset_copy_match_set(vset_t dst, vset_t src, vset_t match, int p_len, int *proj) {
+    dst->dom->shared.set_copy_match_set(dst, src, match, p_len, proj);
+}
+
 int vproj_create(vdom_t dom, int p_len, int* proj){
     if (dom->shared.proj_create==NULL){
         return -1;

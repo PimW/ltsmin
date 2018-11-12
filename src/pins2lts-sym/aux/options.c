@@ -289,6 +289,7 @@ int max_sat_levels;
 ci_list **r_projs = NULL;
 ci_list **w_projs = NULL;
 ci_list **l_projs = NULL;
+ci_list *total_proj = NULL;
 vdom_t domain;
 matrix_t *read_matrix;
 matrix_t *write_matrix;

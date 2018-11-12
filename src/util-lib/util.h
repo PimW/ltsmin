@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <hre/user.h>
+#include <assert.h>
 
 #define max(a,b) ({ \
     typeof(a) _a = (a); \

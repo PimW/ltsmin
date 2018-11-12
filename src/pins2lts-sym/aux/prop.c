@@ -731,7 +731,7 @@ eval_predicate_set(ltsmin_expr_t e, ltsmin_parse_env_t env, vset_t states)
  * @param states
  */
 inline void
-find_counter_examples(vset_t states, vset_t ce_states)
+find_counter_examples(vset_t ce_states, vset_t states)
 {
     // Only check if not all invariant have been violated and there are states
     if (num_inv_violated != num_inv && !vset_is_empty(states)) {
@@ -744,14 +744,18 @@ find_counter_examples(vset_t states, vset_t ce_states)
                 // Make copy of the invariant set
                 vset_t container = ((struct inv_info_s*) inv_expr[i]->context)->container;
                 vset_copy(container, inv_set[i]);
-                // Evaluate the invariant expression on the container set (in the expression ccontext)
+                // Evaluate the invariant expression on the container set (in the expression context)
                 eval_predicate_set(inv_expr[i], inv_parse_env[i], states);
                 // Compare the original projected states set with the states
                 Warning(info, "equality check");
                 if (!vset_equal(inv_set[i], container)) {
 
-                    vset_copy(ce_states, inv_set[i]);
-                    vset_minus(ce_states, container);
+                    Warning(info, "Storing counter examples");
+                    vset_minus(inv_set[i], container);
+                    vset_copy_match_set(ce_states, states, inv_set[i], inv_proj[i]->count, inv_proj[i]->data);
+
+//                    vset_copy(ce_states, inv_set[i]);
+//                    vset_minus(ce_states, container);
 
                     Warning(info, " ");
                     Warning(info, "Invariant violation (%s)!", inv_detect[i]);

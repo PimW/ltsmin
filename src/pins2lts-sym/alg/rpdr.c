@@ -29,6 +29,7 @@
 #include <util-lib/bitset.h>
 #include <util-lib/dfs-stack.h>
 #include <util-lib/util.h>
+#include "aux/options.h"
 
 
 #ifdef HAVE_SYLVAN
@@ -36,7 +37,6 @@
 #include <sylvan.h>
 
 static vset_t g_universe;
-
 
 /*
  * Frame linked list structure and operations
@@ -48,6 +48,15 @@ typedef struct frame
     struct frame* next;
     struct frame* prev;
 } frame;
+
+static void vset_count_info(vset_t set)
+{
+    long count;
+    long double el;
+    vset_count_fn(set, &count, &el);
+    Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
+}
+
 
 void
 create_new_frame(vset_t frame, vset_t universe)
@@ -90,50 +99,9 @@ pre(vset_t dst, vset_t source, vset_t universe)
     add_step(true, dst, source, universe);
 }
 
-vset_t
-reverse_reachability_counterexample(vset_t counter_examples, vset_t V, int depth)
-{
-    vset_t reverse_reachable = copy(counter_examples);
-    vset_t current_reach = copy(counter_examples);
-    vset_t new_reach = empty();
-    for (int i=0; i < depth; i++) {
-        add_step(true, new_reach, current_reach, V);
-        vset_union(reverse_reachable, new_reach);
-
-        vset_destroy(current_reach);
-
-        current_reach = new_reach;
-        new_reach = empty();
-    }
-    return reverse_reachable;
-}
-
-//bool
-//refine_reachable_states(vset_t unsafe, vset_t* reachable, int depth)
-//{
-//    bool is_counter_example;
-//
-//    vset_t new_unsafe = reverse_reachability_step(unsafe, reachable[depth]);
-//    if (vset_is_empty(new_unsafe)) {
-//        return false;
-//    }
-//
-//    if (depth == 0) {
-//        return true;        // Real counterexample found; unsafe n I != {}
-//    }
-//
-//    is_counter_example = refine_reachable_states(new_unsafe, reachable, depth - 1);
-//
-//    if (!is_counter_example) {
-//        vset_minus(reachable[depth], new_unsafe);
-//    }
-//
-//    return is_counter_example;
-//}
-
 /**
  *
- * @return a single bad state
+ * @return a set of bad states
  */
 void
 get_bad_states(vset_t bad_states, vset_t universe, vset_t P)
@@ -168,12 +136,12 @@ generalize(vset_t states, frame *current_frame)
 {
     ci_list *projection = ci_create((size_t)N); // TODO: add size of base/full projection
     ci_list *tmp_projection = ci_create((size_t)N);
-    ci_list *inverse_projection = ci_create((size_t)N);
+    //ci_list *inverse_projection = ci_create((size_t)N);
 
     ci_copy(projection, total_proj);
 
     vset_t generalized_states;
-    vset_t inverse_states;
+    //vset_t inverse_states;
     vset_t total_generalized_states = vset_create(domain, -1, NULL);
 
     for (int i = 0; i < nGrps; i++) {
@@ -182,12 +150,15 @@ generalize(vset_t states, frame *current_frame)
 
         generalized_states = vset_create(domain, tmp_projection->count, tmp_projection->data);
 
-        vset_project(generalized_states, states);
+//        vset_project(generalized_states, states);
+//
+//        ci_invert(inverse_projection, tmp_projection, total_proj);
+//        inverse_states = vset_create(domain, inverse_projection->count, inverse_projection->data);
+//        vset_project(inverse_states, g_universe);
+//        vset_join(total_generalized_states, generalized_states, inverse_states);
 
-        ci_invert(inverse_projection, tmp_projection, total_proj);
-        inverse_states = vset_create(domain, inverse_projection->count, inverse_projection->data);
-        vset_project(inverse_states, g_universe);
-        vset_join(total_generalized_states, generalized_states, inverse_states);
+        // Compute generalized states s.t. G = U /\ proj(S)
+        vset_copy_match_set(generalized_states, g_universe, states, tmp_projection->count, tmp_projection->data);
 
         if (!contains_initial(generalized_states)
             && is_relative_inductive(generalized_states, current_frame)) {
@@ -196,12 +167,19 @@ generalize(vset_t states, frame *current_frame)
     }
 }
 
+vset_t invariant_states;
+
 bool
 propagate_removed_states(frame *frame)
 {
     struct frame *f = frame;
 
     while (f->prev != NULL) {
+        if (vset_equal(f->prev->states, f->states)) {
+            invariant_states = vset_create(domain, -1, NULL);
+            vset_copy(invariant_states, f->states);
+            return true;
+        }
         vset_minus(f->prev->states, f->states);
         f = f->prev;
     }
@@ -211,18 +189,22 @@ void
 recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *current_frame)
 {
     if (!vset_is_empty(bad_states)) {
-        if (frame_is_final(current_frame)) {
+        if (frame_is_initial(current_frame)) {
+            Warning(info, "first frame reached");
             vset_intersect(bad_states, current_frame->states);
             vset_copy(counter_example, bad_states);
             return;
         }
 
         vset_t new_bad_states = vset_create(domain, -1, NULL);
+        Warning(info, "Compute preimage");
         pre(new_bad_states, bad_states, g_universe);
 
+        Warning(info, "Recursive step");
         recursive_remove_states(counter_example, new_bad_states, current_frame->prev);
 
         if (!vset_is_empty(counter_example)) {
+            Warning(info, "Intersection with initial states");
             return;
         }
 
@@ -233,6 +215,7 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
         vset_minus(bad_states, image);
     }
 
+    Warning(info, "Generalizing");
     generalize(bad_states, current_frame); // not so bad after all
     vset_minus(current_frame->states, bad_states);
 }
@@ -260,8 +243,11 @@ pdr(vset_t I, vset_t P, vset_t universe)
 
     while(true) {
         get_bad_states(bad_states, universe, P);
+
         if (!vset_is_empty(bad_states)) {
+            Warning(info, "Recursive remove states");
             recursive_remove_states(counter_example, bad_states, current_frame);
+            Warning(info, "Checking for intersection with initial states");
             if (!vset_is_empty(counter_example)) {
                 return false;
             }
@@ -272,9 +258,16 @@ pdr(vset_t I, vset_t P, vset_t universe)
 
             insert_before(total, current_frame);
 
+            Warning(info, "Propagate backward");
             // Propagate removed states backwards
             if (propagate_removed_states(total->prev)) {
-                return true;
+                vset_minus(invariant_states, P);
+                if (vset_is_empty(invariant_states)) {
+                    Warning(info, "invariant found");
+                    return true;
+                } else {
+                    Warning(info, "error");
+                }
             }
         }
     }

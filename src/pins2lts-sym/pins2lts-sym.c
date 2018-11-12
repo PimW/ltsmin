@@ -36,6 +36,7 @@
 #include <pins2lts-sym/alg/reach.h>
 #include <pins2lts-sym/alg/sat.h>
 #include <pins2lts-sym/alg/scc.h>
+#include <pins2lts-sym/alg/rpdr.h>
 #include <pins2lts-sym/aux/options.h>
 #include <pins2lts-sym/aux/output.h>
 #include <pins2lts-sym/aux/prop.h>
@@ -171,7 +172,8 @@ init_domain(vset_implementation_t impl) {
     group_tmp      = (vset_t*)RTmalloc(nGrps * sizeof(vset_t));
     r_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
     w_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
-    total_proj     = (ci_list *)RTmalloc(sizeof(int) * N + 1);
+    //total_proj     = (ci_list *)RTmalloc(sizeof(int) * N + 1);
+    total_proj     = ci_create(N);
 
     l_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[sLbls]));
     label_false    = (vset_t*)RTmalloc(sLbls * sizeof(vset_t));
@@ -233,11 +235,13 @@ init_domain(vset_implementation_t impl) {
         }
     }
 
-    total_proj->count = N;
+    //total_proj->count = N;
     for (int i = 0; i < N; i++) {
         ci_add(total_proj, i);
     }
 
+    Warning(info, "Total projection: ");
+    ci_print(total_proj);
 
     l_projs = (ci_list **) dm_rows_to_idx_table (GBgetStateLabelInfo(model));
     for (int i = 0; i < sLbls; i++) {
@@ -501,6 +505,22 @@ static void actual_main(void *arg)
 
     if (local) {
         run_local (initial, visited);
+
+        vset_t CE = vset_create(domain, -1, NULL);
+
+        Warning(info, "Extracting counter examples");
+        find_counter_examples(CE, visited);
+
+        long count;
+        long double el;
+        vset_count_fn(CE, &count, &el);
+        Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
+
+        vset_t P = vset_create(domain, -1, NULL);
+        vset_copy(P, visited);
+        vset_minus(P, CE);
+
+        pdr(initial, P, visited);
     } else {
         /* run reachability */
         run_reachability(visited, files[1]);

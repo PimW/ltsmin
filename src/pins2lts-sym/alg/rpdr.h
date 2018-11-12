@@ -3,6 +3,6 @@
 
 #include <vset-lib/vector_set.h>
 
-extern bool reach_pdr(vset_t I, vset_t notP, vset_t universe, int level);
+extern bool pdr(vset_t I, vset_t notP, vset_t universe);
 
 #endif //ALG_SCC_H

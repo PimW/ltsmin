@@ -480,27 +480,16 @@ reach_local (vset_t I, vset_t V)
 
     vset_count_info(V, -1, level);
 
-    find_counter_examples();
-
-//    Warning(info, "Checking invariants");
-//    vset_t unsafe = vset_create (domain, inv_proj[0]->count, inv_proj[0]->data);
+//    vset_t CE = vset_create(domain, -1, NULL);
 //
-//    Warning(info, "Finding counter-examples");
-//    find_counter_examples(states, unsafe);
+//    Warning(info, "Extracting counter examples");
+//    find_counter_examples(CE, V);
 //
-//    vset_t U = vset_create(domain, -1, NULL);
-//
-//    vset_union(U, unsafe);
-//
-//    vset_destroy(unsafe);
+//    int state[total_proj->count];
+//    vset_example(CE, state);
+//    Statef(info, state, total_proj);
+//    vset_count_info(CE, -1, level);
 
-    //Warning(info, "Running PDR");
-    //reach_pdr(I, U, states, level);
-
-//    Warning(info, "Traditional invariant check");
-//    check_invariants(states, level);
-
-    //print_bdd(group_next[0]->bdd);
 
     return level;
     (void) V;

@@ -285,6 +285,34 @@ set_copy_match(vset_t dst, vset_t src, int p_len, int *proj, int *match)
     }
 }
 
+static void
+set_copy_match_set(vset_t dst, vset_t src, vset_t match, int p_len, int *proj)
+{
+    LACE_ME;
+
+    assert(dst->meta == src->meta); // for now, require same meta
+
+    if (p_len == 0) {
+        dst->mdd = src->mdd;
+    } else {
+        const int vector_size = src->dom->shared.size;
+        uint32_t meta[vector_size+1];
+        int j=0; // current index in src proj
+        int k=0; // current index in match proj
+        for (int i=0; i<vector_size; i++) {
+            if (k == p_len) break; // end of match
+            if (src->k == -1 || src->proj[j] == i) {
+                if (proj[k] == i) meta[j++] = 1;
+                else meta[j++] = 0;
+            }
+        }
+        meta[j++] = -1; // = rest not in match
+        MDD meta_mdd = lddmc_refs_push(lddmc_cube(meta, j));
+        dst->mdd = lddmc_match(src->mdd, match->mdd, meta_mdd);
+        lddmc_refs_pop(2);
+    }
+}
+
 struct enum_context
 {
     vset_element_cb cb;
@@ -1089,6 +1117,7 @@ set_function_pointers(vdom_t dom)
     dom->shared.set_enum=set_enum;
     dom->shared.set_enum_match=set_enum_match;
     dom->shared.set_copy_match=set_copy_match;
+    dom->shared.set_copy_match_set=set_copy_match_set;
     dom->shared.set_join=set_join;
     dom->shared.set_visit_par=set_visit_par;
     dom->shared.set_visit_seq=set_visit_seq;

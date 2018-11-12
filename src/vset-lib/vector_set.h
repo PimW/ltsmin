@@ -162,6 +162,12 @@ extern void vset_copy_match(vset_t dst, vset_t src, int p_len,int* proj,int*matc
 extern void vset_copy_match_proj(vset_t dst, vset_t src, int p_len, int* proj, int p_id, int*match);
 
 /**
+ \brief Copy the elements of a set that match the given projection, instead of a single state a set
+ is used to match.
+ */
+extern void vset_copy_match_set(vset_t dst, vset_t src, vset_t match, int p_len, int *proj);
+
+/**
 \brief Create a projection.
 */
 extern int vproj_create(vdom_t dom, int p_len, int* proj);

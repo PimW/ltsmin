@@ -24,6 +24,7 @@ struct vector_domain_shared {
 	void (*set_enum_match)(vset_t set,int p_len,int* proj,int*match,vset_element_cb cb,void* context);
 	void (*set_copy_match)(vset_t src,vset_t dst,int p_len,int* proj,int*match);
 	void (*set_copy_match_proj)(vset_t src,vset_t dst,int p_len,int* proj,int p_id,int*match);
+	void (*set_copy_match_set)(vset_t dst, vset_t src, vset_t match, int p_len, int *proj);
 	int (*proj_create)(int p_len,int* proj);
 	void (*set_example)(vset_t set,int *e);
 	void (*set_example_match)(vset_t set,int *e, int p_len, int* proj, int*match);
