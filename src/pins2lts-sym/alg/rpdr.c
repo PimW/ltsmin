@@ -37,6 +37,7 @@
 #include <sylvan.h>
 
 static vset_t g_universe;
+static vset_t g_initial;
 
 /*
  * Frame linked list structure and operations
@@ -113,17 +114,19 @@ get_bad_states(vset_t bad_states, vset_t universe, vset_t P)
 bool
 contains_initial(vset_t states)
 {
+    //Warning(info, "> Checking intial states");
     vset_t tmp = vset_create(domain, -1, NULL);
 
     vset_copy(tmp, states);
-    vset_intersect(tmp, initial);
+    vset_intersect(tmp, g_initial);
 
-    return (bool) vset_is_empty(tmp);
+    return vset_is_empty(tmp) >= 0;
 }
 
 bool
 is_relative_inductive(vset_t states, frame *f)
 {
+    //Warning(info, "> Checking relative inductiveness");
     vset_t tmp = vset_create(domain, -1, NULL);
 
     post(tmp, f->states, states); // Post(prev(current_frame).states) /\ states
@@ -138,17 +141,25 @@ generalize(vset_t states, frame *current_frame)
     ci_list *tmp_projection = ci_create((size_t)N);
     //ci_list *inverse_projection = ci_create((size_t)N);
 
+    //Warning(info, "projection->count: %d, total_proj->count: %d", projection->count, total_proj->count);
     ci_copy(projection, total_proj);
 
-    vset_t generalized_states;
+    vset_t generalized_states = vset_create(domain, -1, NULL);
     //vset_t inverse_states;
     vset_t total_generalized_states = vset_create(domain, -1, NULL);
 
     for (int i = 0; i < nGrps; i++) {
+//        Warning(info, "Updating temp projection");
         ci_copy(tmp_projection, projection);
+//        Warning(info, "Current projection: ");
+//        ci_print(tmp_projection);
+//        Warning(info, "Removing: ");
+//        ci_print(r_projs[i]);
         ci_minus(tmp_projection, r_projs[i]);
+//        Warning(info, "Resulting projection: ");
+//        ci_print(tmp_projection);
 
-        generalized_states = vset_create(domain, tmp_projection->count, tmp_projection->data);
+        //generalized_states = vset_create(domain, -1, NULL);
 
 //        vset_project(generalized_states, states);
 //
@@ -158,12 +169,16 @@ generalize(vset_t states, frame *current_frame)
 //        vset_join(total_generalized_states, generalized_states, inverse_states);
 
         // Compute generalized states s.t. G = U /\ proj(S)
+        //Warning(info, "Calculating the generalized states");
         vset_copy_match_set(generalized_states, g_universe, states, tmp_projection->count, tmp_projection->data);
 
+        //Warning(info, "Checking relative inductiveness");
         if (!contains_initial(generalized_states)
             && is_relative_inductive(generalized_states, current_frame)) {
+            //Warning(info, "storing generalized states");
             vset_copy(states, total_generalized_states);
         }
+        //Warning(info, "Done")
     }
 }
 
@@ -190,17 +205,17 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
 {
     if (!vset_is_empty(bad_states)) {
         if (frame_is_initial(current_frame)) {
-            Warning(info, "first frame reached");
+            //Warning(info, "first frame reached");
             vset_intersect(bad_states, current_frame->states);
             vset_copy(counter_example, bad_states);
             return;
         }
 
         vset_t new_bad_states = vset_create(domain, -1, NULL);
-        Warning(info, "Compute preimage");
+        //Warning(info, "Compute preimage");
         pre(new_bad_states, bad_states, g_universe);
 
-        Warning(info, "Recursive step");
+        //Warning(info, "Recursive step");
         recursive_remove_states(counter_example, new_bad_states, current_frame->prev);
 
         if (!vset_is_empty(counter_example)) {
@@ -215,7 +230,7 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
         vset_minus(bad_states, image);
     }
 
-    Warning(info, "Generalizing");
+    //Warning(info, "Generalizing");
     generalize(bad_states, current_frame); // not so bad after all
     vset_minus(current_frame->states, bad_states);
 }
@@ -224,8 +239,9 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
 bool
 pdr(vset_t I, vset_t P, vset_t universe)
 {
-    Warning(info, "Initialize refined reachability");
+    Warning(info, "Initialize PDR");
     g_universe = universe;
+    g_initial = I;
 
     frame *frame_initial = RTmallocZero (sizeof(frame));
     frame_initial->states = I;
@@ -245,31 +261,38 @@ pdr(vset_t I, vset_t P, vset_t universe)
         get_bad_states(bad_states, universe, P);
 
         if (!vset_is_empty(bad_states)) {
-            Warning(info, "Recursive remove states");
             recursive_remove_states(counter_example, bad_states, current_frame);
-            Warning(info, "Checking for intersection with initial states");
             if (!vset_is_empty(counter_example)) {
                 return false;
             }
-        } else {
-            // Create new frame
-            current_frame = RTmallocZero (sizeof(frame));
-            current_frame->states = vset_create(domain, -1, NULL);
+        }
 
-            insert_before(total, current_frame);
+        // Create new frame
+        current_frame = RTmallocZero (sizeof(frame));
+        current_frame->states = vset_create(domain, -1, NULL);
 
-            Warning(info, "Propagate backward");
-            // Propagate removed states backwards
-            if (propagate_removed_states(total->prev)) {
-                vset_minus(invariant_states, P);
-                if (vset_is_empty(invariant_states)) {
-                    Warning(info, "invariant found");
-                    return true;
-                } else {
-                    Warning(info, "error");
-                }
+        insert_before(total, current_frame);
+
+        // Propagate removed states backwards
+        if (propagate_removed_states(total->prev)) {
+            Warning(info, "Verifying invariant: ");
+
+            vset_t inv = vset_create(domain, -1, NULL);
+            Warning(info, "Checking inductiveness...");
+            post(inv, invariant_states, universe);
+            vset_minus(inv, invariant_states);
+
+            Warning(info, "Checking soundness...");
+            vset_minus(invariant_states, P);
+
+            if (vset_is_empty(inv) && vset_is_empty(invariant_states)) {
+                Warning(info, "invariant found");
+                return true;
+            } else {
+                Warning(info, "error");
             }
         }
+
     }
 }
 

@@ -110,19 +110,15 @@ ci_add (ci_list *list, int num)
 }
 
 /**
- * Remove element from array based on value, assumes all elements are unique.
+ * Remove element from array based on index, assumes all elements are unique.
  * Resizes the array. (does not de-allocate memory)
  * @param list
- * @param num
+ * @param index
  */
 static inline void
 ci_remove(ci_list *list, int num)
 {
-    int index = ci_find(list, num);
-
-    if (index == -1) return;
-
-    for (int a = index; a != *ci_end(list) - 1; a++) {
+    for (int a = num; a != list->count; a++) {
         list->data[a] = list->data[a+1];
     }
     list->count--; // resize
@@ -156,7 +152,7 @@ ci_add_if (ci_list *list, int num, int condition)
 static inline void
 ci_copy(ci_list *dst, ci_list *src)
 {
-    assert(dst->count >= src->count); // make sure we only write to allocated memory
+    //assert(dst->count >= src->count); // make sure we only write to allocated memory
 
     ci_clear(dst);
 
@@ -207,10 +203,9 @@ ci_minus(ci_list *dst, ci_list *src)
         } else if (dst->data[i] > src->data[j]) {
             j++;
         } else { // dst->data[i] == src->data[j]
-            ci_remove(dst, i); // removes value and shrinks array
+            ci_remove(dst, i); // removes index and shrinks array
             j++; // assuming all values are unique we don't have to check twice
         }
-
     }
 }
 
