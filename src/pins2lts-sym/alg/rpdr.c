@@ -74,13 +74,18 @@ insert_before(frame *list, frame *new)
     new->next->prev = new;
 }
 
-
+/**
+ * Calculates the image of a set
+ */
 vset_t
 post(vset_t dst, vset_t source, vset_t universe)
 {
     add_step(false, dst, source, universe);
 }
 
+/**
+ * Calculates the pre-image of a set.
+ */
 vset_t
 pre(vset_t dst, vset_t source, vset_t universe)
 {
@@ -88,7 +93,7 @@ pre(vset_t dst, vset_t source, vset_t universe)
 }
 
 /**
- *
+ * Takes all states in U that do not satisfy P
  * @return a set of bad states
  */
 void
@@ -98,6 +103,9 @@ get_bad_states(vset_t bad_states, vset_t universe, vset_t P)
     vset_minus(bad_states, P);
 }
 
+/**
+ * Check if a set os states contains an initial state
+ */
 bool
 contains_initial(vset_t states)
 {
@@ -109,6 +117,10 @@ contains_initial(vset_t states)
     return vset_is_empty(tmp) >= 0;
 }
 
+/**
+ * Checks relative-inductiveness of states to frame f.
+ * This means that Post(states) /\ f->states = 0
+ */
 bool
 is_relative_inductive(vset_t states, frame *f)
 {
@@ -119,6 +131,16 @@ is_relative_inductive(vset_t states, frame *f)
     return (bool) vset_is_empty(tmp); // == 0
 }
 
+/**
+ * Generalizes relative-inductive states to remove a bigger chunk of the state-space.
+ * First a full projection is created, then for each group the values from the read projection are removed
+ * from the full projection. We then check if the states are still relative-inductive to the current frame.
+ * If this is still the case then the values stay removed from the projection and we go to the next group.
+ * To check for relative-inductiveness we take all states in U that match states in all values for the projection.
+ *
+ * @param states - states that are relative inductive to the current frame
+ * @param current_frame
+ */
 void
 generalize(vset_t states, frame *current_frame)
 {
@@ -134,7 +156,6 @@ generalize(vset_t states, frame *current_frame)
         ci_copy(tmp_projection, projection);
         ci_minus(tmp_projection, r_projs[i]);
 
-
         // Compute generalized states s.t. G = U /\ proj(S)
         vset_copy_match_set(generalized_states, g_universe, states, tmp_projection->count, tmp_projection->data);
 
@@ -143,10 +164,20 @@ generalize(vset_t states, frame *current_frame)
             vset_copy(states, total_generalized_states);
         }
     }
+
+    ci_free(projection);
+    ci_free(tmp_projection);
 }
 
 vset_t invariant_states;
 
+/**
+ * Propagate all removed states backwards and checks whether an invariant is found.
+ * Each iteration we remove all states that are in prev(f) and not in f from prev(f)
+ * then set f := prev(f).
+ * @param frame - final frame containing the universe
+ * @return true <=> an invariant is found.
+ */
 bool
 propagate_removed_states(frame *frame)
 {
@@ -158,11 +189,30 @@ propagate_removed_states(frame *frame)
             vset_copy(invariant_states, f->states);
             return true;
         }
-        vset_minus(f->prev->states, f->states);
+        vset_intersect(f->prev->states, f->states);
         f = f->prev;
     }
 }
 
+/**
+ * A recursive DFS algorithm that removes states that are relative inductive for each frame.
+ *  First the function checks whether bad_states contains any states. If not this frame is relative
+ *  inductive to the next frame.
+ *  If it is not relative inductive then we check if the current frame is the initial frame:
+ *      - if yes, a counter example has been found
+ *  Otherwise we compute the pre-image of the bad states in this frame and execute another recursive step
+ *  for the preceding frame.
+ *  If no counter-examples are found in any of the preceding frames then we get states that were found to
+ *  be relative inductive by the preceding frame.
+ *  These states are added to the bad states of this frame (which at this point are known to not reach I).
+ *  We then take the states that are (still) relative inductive.
+ *  Finally all relative inductive states are generalized and removed from this frame and returned to the next
+ *  frame.
+ *
+ * @param counter_example - set passed by reference used to return counter examples.
+ * @param bad_states - states that can reach states not in P.
+ * @param current_frame - current working frame with related set of states.
+ */
 void
 recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *current_frame)
 {
@@ -194,7 +244,24 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
     vset_minus(current_frame->states, bad_states);
 }
 
-
+/**
+ * Main PDR loop:
+ *  First the initial and final frames are created containing the initial states and universe.
+ *  This also builds the initial (doubly) linked list structure used for the frames.
+ *  Each iteration of the main loop:
+ *     - Bad states are exracted from the universe.
+ *     - These states are used to recursively execute a kind of backwards DFS, until
+ *       a frame is reached that is relative inductive, states are removed propagating forward.
+ *       If the initial states are reached a counter example is found and PDR returns false.
+ *     - Next a new frame is added before the last frame.
+ *     - Finally removed states are propagated backwards to make sure every frame is a subset
+ *       of the next frame.
+ *
+ * @param I - initial states used for reachability.
+ * @param P - set of states that satisfies the property.
+ * @param universe - set of all states found by compositional reachability.
+ * @return true <=> an invariant is found, false <=> a counter-example is found.
+ */
 bool
 pdr(vset_t I, vset_t P, vset_t universe)
 {
@@ -234,6 +301,7 @@ pdr(vset_t I, vset_t P, vset_t universe)
 
         // Propagate removed states backwards
         if (propagate_removed_states(total->prev)) {
+            // All code beyond this is just verifying the invariant
             Warning(info, "Verifying invariant: ");
 
             vset_t inv = vset_create(domain, -1, NULL);
