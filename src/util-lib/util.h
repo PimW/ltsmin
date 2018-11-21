@@ -175,8 +175,9 @@ ci_copy(ci_list *dst, ci_list *src)
 static inline void
 ci_union(ci_list *dst, ci_list *src)
 {
-    for (int *s = ci_begin(src); s < ci_end(src); s++)
-        ci_add_if (dst, *s, ci_binary_search(dst, *s) == -1);
+    for (int *s = ci_begin(src); s < ci_end(src); s++) {
+        ci_add_if (dst, *s, ci_find(dst, *s) == -1);
+    }
     ci_sort(dst);
 }
 
