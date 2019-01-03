@@ -380,14 +380,18 @@ void add_states_from_group_to_group(int i, int dest)
 
 // TODO: make sure everything works with the correct memory
 void
-compute_full_states(vset_t total_states)
+compute_full_states(vset_t initial_states, vset_t total_states)
 {
     ci_list *combined_projection = ci_create((size_t)N);
+    ci_list *complement_proj = ci_create((size_t)N);
+//    ci_list *intersected_proj = ci_create((size_t)N);
+//    ci_list *left_proj = ci_create((size_t)N);
+//    ci_list *right_proj = ci_create((size_t)N);
 
     ci_union(combined_projection, r_projs[0]);
 
-    Warning(info, "Computing full states...");
 
+    Warning(info, "Computing full states...");
 
     vset_t states = vset_create(domain, combined_projection->count, combined_projection->data);
     vset_copy(states, V_r[0]);
@@ -395,34 +399,219 @@ compute_full_states(vset_t total_states)
     vset_t tmp;
 
     for(int i = 1; i <nGrps; i++) {
+
+        // Join: p[A \/ B](A /\ B) = p[A\B](A) x p[A/\B](A) \/ p[A/\B](B)  x p[B\A](B)
+
+//        ci_copy(intersected_proj, r_projs[i]);
+//        ci_copy(left_proj, r_projs[i]);
+//        ci_copy(right_proj, combined_projection);
+//
+//        ci_invert(complement_proj, combined_projection, total_proj);
+//        ci_minus(intersected_proj, complement_proj);
+//        ci_minus(left_proj, intersected_proj);
+//        ci_minus(right_proj, intersected_proj);
+
+//        Warning(info, "total: ");
+//        ci_print(total_proj);
+//        Warning(info, "combined: ");
+//        ci_print(combined_projection);
+//        Warning(info, "complement: ");
+//        ci_print(complement_proj);
+//        Warning(info, "r_proj: ");
+//        ci_print(r_projs[i]);
+//        Warning(info, "intersection: ");
+//        ci_print(intersected_proj);
+//        printf("\n");
+
+//        vset_t left_set = vset_create(domain, left_proj->count, left_proj->data);
+//        vset_t right_set = vset_create(domain, right_proj->count, right_proj->data);
+//        vset_t intersected_set = vset_create(domain, intersected_proj->count, intersected_proj->data);
+//        vset_t intersected_set2 = vset_create(domain, intersected_proj->count, intersected_proj->data);
+//
+//        vset_project(left_set, V_r[i]);
+//        vset_project(right_set, states);
+//        if (intersected_proj->count > 0) {
+//            vset_project(intersected_set, V_r[i]);
+//            vset_project(intersected_set2, states);
+//
+//            vset_union(intersected_set, intersected_set2);
+//
+//            vset_join(states, intersected_set, right_set);
+//        }
+
         ci_union(combined_projection, r_projs[i]);
 
         tmp = vset_create(domain, combined_projection->count, combined_projection->data);
+
         vset_join(tmp, states, V_r[i]);
+//        if (left_proj > 0) {
+//            vset_join(tmp, states, left_set);
+//        }
+
 
         vset_clear(states);
         states = vset_create(domain, combined_projection->count, combined_projection->data);
         vset_copy(states, tmp);
 
+        vset_count_info(states, -1, -1);
+
         vset_destroy(tmp);
+//        vset_destroy(left_set);
+//        vset_destroy(right_set);
+//        vset_destroy(intersected_set);
+//        vset_destroy(intersected_set2);
     }
 
-    vset_join(total_states, states, states);
+    // JOIN WITH initial for complement of combined projection.
+    ci_clear(complement_proj);
+    ci_invert(complement_proj, combined_projection, total_proj);
+
+//         Warning(info, "total: ");
+//        ci_print(total_proj);
+//        Warning(info, "combined: ");
+//        ci_print(combined_projection);
+//        Warning(info, "complement: ");
+//        ci_print(complement_proj);
+
+
+    tmp = vset_create(domain, complement_proj->count, complement_proj->data);
+    vset_project(tmp, initial_states);
+
+    vset_join(total_states, tmp, states);
 
     vset_destroy(states);
 }
 
+void
+compute_full_level(vset_t visited, vset_t total_queue)
+{
+    ci_list *combined_projection = ci_create((size_t)N);
+
+    ci_union(combined_projection, w_projs[0]);
+
+    vset_t states = vset_create(domain, combined_projection->count, combined_projection->data);
+    vset_copy(states, Q_w[0]);
+
+    vset_t tmp;
+
+    for(int i = 1; i <nGrps; i++) {
+        if (!vset_is_empty(Q_w[i])) {
+            ci_union(combined_projection, w_projs[i]);
+
+            tmp = vset_create(domain, combined_projection->count, combined_projection->data);
+            vset_join(tmp, states, Q_w[i]);
+
+            vset_clear(states);
+            states = vset_create(domain, combined_projection->count, combined_projection->data);
+            vset_copy(states, tmp);
+
+            vset_destroy(tmp);
+        }
+    }
+
+    ci_list *compl_proj = ci_create((size_t)N);
+    ci_copy(compl_proj, total_proj);
+    ci_minus(compl_proj, combined_projection);
+
+    if (compl_proj->count > 0) {
+        vset_t compl_set = vset_create(domain, compl_proj->count, compl_proj->data);
+
+        vset_project(compl_set, visited);
+
+        vset_join(total_queue, compl_set, states);
+
+        vset_destroy(compl_set);
+    }  else {
+        vset_join(total_queue, states, states);
+    }
+
+    ci_free(combined_projection);
+    ci_free(compl_proj);
+    vset_destroy(states);
+}
+
 int
-reach_local (vset_t I, vset_t V)
+reach_local_full(vset_t I, vset_t V)
 {
     int                 level = 0;
     bool                all_done;
+
+    Warning(info, "Running compositional reachability with full state space computation...");
+
+    vset_t total_queue = vset_create(domain, -1, NULL);
+    vset_t V_old = vset_create(domain, -1, NULL);
+    vset_copy(V, I);
 
     do { // while \exists_i \in [1..K] : Q^r_i != 0 do
         level++;
         all_done = true;
 
         Warning(info, "Approx Reach level: %d", level);
+        for (int i = 0; i < nGrps; i++) {
+            //write_group_t      *wg = &writers[i];
+            vset_clear   (Q_w[i]);
+
+            learn_new_transitions_for_group(i);
+
+            apply_transition_relation_to_group(i);
+
+            recombine_new_states_for_group(i);
+        }
+
+        //vset_reorder (domain);
+
+        for (int i = 0; i < nGrps; i++) {
+            vset_clear(Q_r[i]);
+
+            // Compute next exploration states
+            vset_copy(N_r[i], Y_r[i]);
+            vset_minus(N_r[i], V_r[i]);
+
+            vset_union(V_r[i], Y_r[i]);
+
+            vset_clear(Y_r[i]);
+        }
+
+        vset_copy(V_old, V);
+
+        compute_full_states(I, V);
+
+        all_done = (bool)vset_equal(V, V_old);
+
+        vset_copy(total_queue, V);
+        vset_minus(total_queue, V_old);
+
+        for (int i = 0; i < nGrps; i++) {
+            vset_project(Q_r[i], V);
+            //vset_project(N_r[i], total_queue);
+            if (all_done) {
+                vset_count_info(Q_r[i], i, level);
+                vset_count_info(N_r[i], i, level);
+            }
+            //vset_enum(Q_r[i], print_state_r, &i);
+        }
+
+    } while (!all_done);
+
+    Warning(info, "Next state called %d times!", explored)
+
+    vset_count_info(V, -1, level);
+}
+
+int
+reach_local (vset_t I, vset_t V)
+{
+    int                 level = 0;
+    int                 explored_old = 0;
+    bool                all_done;
+    Warning(info, "Running compositional reachability without state space computation...");
+
+    do { // while \exists_i \in [1..K] : Q^r_i != 0 do
+        level++;
+        all_done = true;
+
+        Warning(info, "Compositional level: %d", level);
+        explored_old = explored;
         for (int i = 0; i < nGrps; i++) {
             //write_group_t      *wg = &writers[i];
             vset_clear   (Q_w[i]);
@@ -444,6 +633,7 @@ reach_local (vset_t I, vset_t V)
                 }
             }
         }
+        Warning(info, "explored %d new states (total %d)", (explored - explored_old), explored);
 
         //vset_reorder (domain);
 
@@ -465,31 +655,11 @@ reach_local (vset_t I, vset_t V)
             all_done &= vset_equal (V_old_r[i], V_r[i]);
             vset_copy(V_old_r[i], V_r[i]);
         }
-
     } while (!all_done);
-
-        Warning(info, "Final states: ");
-
-    for (int i = 0; i < nGrps; i++) {
-        vset_count_info(V_r[i], i, level);
-    }
 
     Warning(info, "Next state called %d times!", explored)
 
-    compute_full_states(V);
-
-    vset_count_info(V, -1, level);
-
-//    vset_t CE = vset_create(domain, -1, NULL);
-//
-//    Warning(info, "Extracting counter examples");
-//    find_counter_examples(CE, V);
-//
-//    int state[total_proj->count];
-//    vset_example(CE, state);
-//    Statef(info, state, total_proj);
-//    vset_count_info(CE, -1, level);
-
+    compute_full_states(I, V);
 
     return level;
     (void) V;
@@ -659,9 +829,6 @@ init_local (vset_t I)
 
             vset_project(C_r[i], I);
             vset_project(C_w[i], I);
-
-
-
         }
 
         source_set = vset_create(domain, -1, NULL);
@@ -671,11 +838,7 @@ init_local (vset_t I)
         for (int l = 0; l < N; l++) ci_set (p_all, l, l);
 
         find_domain_intersections ();
-
-
     }
-
-
 
     HREbarrier (HREglobal());
 }
@@ -722,17 +885,12 @@ print_local (vset_t V, int level)
     long int n;
     double e;
     vset_count (V, &n, &e);
-    Warning (info, "Local Levels: %d  %.0f", level, e);
+    Warning (info, "Local Levels: %d, nodes: %d, states: %.0f", level, n, e);
 }
 
 void
 run_local (vset_t I, vset_t V)
 {
-    for (int i = 0; i < nGrps; i++) {
-        vset_count_info(group_explored[i], i, 0);
-    }
-
-
     Warning (info, "Localized [0]");
 
     init_local (I);

@@ -309,7 +309,7 @@ set_copy_match_set(vset_t dst, vset_t src, vset_t match, int p_len, int *proj)
         meta[j++] = -1; // = rest not in match
         MDD meta_mdd = lddmc_refs_push(lddmc_cube(meta, j));
         dst->mdd = lddmc_match(src->mdd, match->mdd, meta_mdd);
-        lddmc_refs_pop(2);
+        lddmc_refs_pop(1);
     }
 }
 
