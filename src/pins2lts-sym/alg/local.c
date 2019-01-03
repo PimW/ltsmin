@@ -384,12 +384,8 @@ compute_full_states(vset_t initial_states, vset_t total_states)
 {
     ci_list *combined_projection = ci_create((size_t)N);
     ci_list *complement_proj = ci_create((size_t)N);
-//    ci_list *intersected_proj = ci_create((size_t)N);
-//    ci_list *left_proj = ci_create((size_t)N);
-//    ci_list *right_proj = ci_create((size_t)N);
 
     ci_union(combined_projection, r_projs[0]);
-
 
     Warning(info, "Computing full states...");
 
@@ -399,55 +395,11 @@ compute_full_states(vset_t initial_states, vset_t total_states)
     vset_t tmp;
 
     for(int i = 1; i <nGrps; i++) {
-
-        // Join: p[A \/ B](A /\ B) = p[A\B](A) x p[A/\B](A) \/ p[A/\B](B)  x p[B\A](B)
-
-//        ci_copy(intersected_proj, r_projs[i]);
-//        ci_copy(left_proj, r_projs[i]);
-//        ci_copy(right_proj, combined_projection);
-//
-//        ci_invert(complement_proj, combined_projection, total_proj);
-//        ci_minus(intersected_proj, complement_proj);
-//        ci_minus(left_proj, intersected_proj);
-//        ci_minus(right_proj, intersected_proj);
-
-//        Warning(info, "total: ");
-//        ci_print(total_proj);
-//        Warning(info, "combined: ");
-//        ci_print(combined_projection);
-//        Warning(info, "complement: ");
-//        ci_print(complement_proj);
-//        Warning(info, "r_proj: ");
-//        ci_print(r_projs[i]);
-//        Warning(info, "intersection: ");
-//        ci_print(intersected_proj);
-//        printf("\n");
-
-//        vset_t left_set = vset_create(domain, left_proj->count, left_proj->data);
-//        vset_t right_set = vset_create(domain, right_proj->count, right_proj->data);
-//        vset_t intersected_set = vset_create(domain, intersected_proj->count, intersected_proj->data);
-//        vset_t intersected_set2 = vset_create(domain, intersected_proj->count, intersected_proj->data);
-//
-//        vset_project(left_set, V_r[i]);
-//        vset_project(right_set, states);
-//        if (intersected_proj->count > 0) {
-//            vset_project(intersected_set, V_r[i]);
-//            vset_project(intersected_set2, states);
-//
-//            vset_union(intersected_set, intersected_set2);
-//
-//            vset_join(states, intersected_set, right_set);
-//        }
-
         ci_union(combined_projection, r_projs[i]);
 
         tmp = vset_create(domain, combined_projection->count, combined_projection->data);
 
         vset_join(tmp, states, V_r[i]);
-//        if (left_proj > 0) {
-//            vset_join(tmp, states, left_set);
-//        }
-
 
         vset_clear(states);
         states = vset_create(domain, combined_projection->count, combined_projection->data);
@@ -456,23 +408,11 @@ compute_full_states(vset_t initial_states, vset_t total_states)
         vset_count_info(states, -1, -1);
 
         vset_destroy(tmp);
-//        vset_destroy(left_set);
-//        vset_destroy(right_set);
-//        vset_destroy(intersected_set);
-//        vset_destroy(intersected_set2);
     }
 
     // JOIN WITH initial for complement of combined projection.
     ci_clear(complement_proj);
     ci_invert(complement_proj, combined_projection, total_proj);
-
-//         Warning(info, "total: ");
-//        ci_print(total_proj);
-//        Warning(info, "combined: ");
-//        ci_print(combined_projection);
-//        Warning(info, "complement: ");
-//        ci_print(complement_proj);
-
 
     tmp = vset_create(domain, complement_proj->count, complement_proj->data);
     vset_project(tmp, initial_states);
