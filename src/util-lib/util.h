@@ -159,6 +159,8 @@ ci_copy(ci_list *dst, ci_list *src)
     for (int i = 0; i < src->count; i++) {
         ci_add(dst, src->data[i]);
     }
+
+    assert(dst->count == src->count);
 }
 
 /**
@@ -225,9 +227,11 @@ ci_minus(ci_list *dst, ci_list *src)
 static inline void
 ci_invert(ci_list *dst, ci_list *src, ci_list *base)
 {
+    ci_clear(dst);
     for (int *a = ci_begin(base); a != ci_end(base); a++) {
-        ci_add_if(dst, *a, ci_binary_search(src, *a) != -1);
+        ci_add_if(dst, *a, ci_binary_search(src, *a) == -1);
     }
+    ci_sort(dst);
 }
 
 static inline void

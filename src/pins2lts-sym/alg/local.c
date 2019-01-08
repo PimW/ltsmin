@@ -378,7 +378,6 @@ void add_states_from_group_to_group(int i, int dest)
     }
 }
 
-// TODO: make sure everything works with the correct memory
 void
 compute_full_states(vset_t initial_states, vset_t total_states)
 {

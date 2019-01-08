@@ -438,6 +438,7 @@ DVE2loadGreyboxModel(model_t model, const char *filename)
     GBsetMatrix(model, LTSMIN_MATRIX_ACTIONS_READS, dm_actions_read_info, PINS_MAY_SET,
                                             PINS_INDEX_GROUP, PINS_INDEX_STATE_VECTOR);
     GBsetDMInfoMayWrite(model, dm_may_write_info);
+
     GBsetDMInfoMustWrite(model, dm_must_write_info);
 
     // set state label matrix (accepting label and guards)

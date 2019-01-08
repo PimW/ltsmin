@@ -422,6 +422,14 @@ learn_labels_par(vset_t states)
 }
 #endif
 
+static void vset_count_info(vset_t set)
+{
+    long count;
+    long double el;
+    vset_count_fn(set, &count, &el);
+    Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
+}
+
 void
 add_step (bool backward, vset_t addto, vset_t from, vset_t universe)
 {

@@ -96,6 +96,7 @@ ci_print_int (log_t log, ci_list *list)
     for (int g = 1; g < list->count; g++) {
         Printf (log, ", %d", ci_get(list, g));
     }
+    Printf(log, "\n");
 }
 
 void
