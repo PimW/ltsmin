@@ -152,8 +152,6 @@ ci_add_if (ci_list *list, int num, int condition)
 static inline void
 ci_copy(ci_list *dst, ci_list *src)
 {
-    //assert(dst->count >= src->count); // make sure we only write to allocated memory
-
     ci_clear(dst);
 
     for (int i = 0; i < src->count; i++) {

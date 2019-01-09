@@ -266,37 +266,83 @@ propagate_removed_states(frame *frame)
 void
 recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *current_frame)
 {
-    if (!vset_is_empty(bad_states)) {
-        if (frame_is_initial(current_frame)) {
-            vset_intersect(bad_states, current_frame->states);
-            vset_copy(counter_example, bad_states);
-            return;
-        }
+    vset_t propagated_states = empty();
+    vset_t new_bad_states = empty();
+    vset_t state_set = empty();
+    int* state = malloc(sizeof(int) * N);
 
-        vset_t new_bad_states = empty();
-        pre(new_bad_states, bad_states, g_universe);
+    vset_t unvisited_states = empty();
+    vset_copy(unvisited_states, bad_states);
 
-        recursive_remove_states(counter_example, new_bad_states, current_frame->prev);
+    // Clear bad states and use it as the return set for forward propagation
+    vset_clear(bad_states);
 
-        if (!vset_is_empty(counter_example)) {
-            Warning(info, "Intersection with initial states");
-            return;
-        }
-
-        vset_union(bad_states, new_bad_states);
-
-        vset_t image = empty();
-        vset_count_info(current_frame->prev->states);
-        vset_count_info(g_universe);
-        post(image, current_frame->prev->states, g_universe);
-        vset_minus(bad_states, image);
-
-        vset_destroy(new_bad_states);
-        vset_destroy(image);
+    if (frame_is_initial(current_frame)) {
+        vset_intersect(unvisited_states, current_frame->states);
+        vset_copy(counter_example, unvisited_states);
+        return;
     }
 
-    generalize(bad_states, current_frame); // not so bad after all
-    vset_minus(current_frame->states, bad_states);
+    while (!vset_is_empty(unvisited_states)) {
+        // extract single bad state
+        vset_example(unvisited_states, state);
+        vset_add(state_set, state);
+
+        // Compute pre-image for the bad state and intersect it with the previous frame
+        vset_clear(new_bad_states);
+        pre(new_bad_states, state_set, current_frame->prev->states);
+
+        // If state is not relative inductive then do a recursive step
+        if (!vset_is_empty(new_bad_states)) {
+            recursive_remove_states(counter_example, new_bad_states, current_frame->prev);
+
+            // Check if the recursive step returns a counter example
+            // if this is the case then directly return it
+            if (!vset_is_empty(counter_example)) {
+                Warning(info, "Intersection with initial states");
+                return;
+            }
+
+            // add all forward propagated states that are still relative inductive
+            // to the next forward propagation set and remove them from this frame.
+            //
+            // compute pre-image of the next frame that intersects with the relative inductive
+            // states of the previous frame to find the non-relative inductive states in this frame.
+            // and remove these from the previous relative inductive states to find the states
+            // that are still relative inductive and add them for forward propagation.
+            pre(propagated_states, current_frame->next->states, new_bad_states);
+            vset_minus(new_bad_states, propagated_states);
+
+            vset_minus(current_frame->states, new_bad_states);
+            vset_union(bad_states, new_bad_states);
+        }
+        // the state is relative inductive to the previous frame, either since
+        // it is already relative inductive at the start OR it is now relative inductive
+        // after the recursive step removed all states from the pre-image from the previous frame
+        // (otherwise a counterexample would have been found)
+
+        // it is now necessary to generalize the state as far as possible.
+        generalize(state_set, current_frame);
+
+        // remove states not reachable from previous frame from current frame
+        vset_minus(current_frame->states, state_set);
+        // add the generalized state to the set for forward propagation
+        vset_union(bad_states, state_set);
+
+        // remove all states in the generalized state set from the unvisited states
+        // since we know they are relative inductive.
+        vset_minus(unvisited_states, state_set);
+
+        // clear state set so we can add a new state in the next iteration
+        vset_clear(state_set);
+    }
+
+    vset_destroy(propagated_states);
+    vset_destroy(new_bad_states);
+    vset_destroy(state_set);
+    vset_destroy(unvisited_states);
+
+    free(state);
 }
 
 /**
@@ -335,23 +381,27 @@ pdr(vset_t I, vset_t P, vset_t universe)
 
     frame *current_frame = frame_initial;
 
-    vset_t bad_states = empty();
+    vset_t bad_state_set = empty();
     vset_t seen_states = empty();
     vset_t counter_example = empty();
 
+    int *bad_state = malloc(sizeof(int) * N);
+
     int depth = 0;
     while(true) {
+
         Warning(info, "Checking depth %d", depth);
-        get_bad_states(bad_states, universe, P);
+        get_bad_state(bad_state, universe, P, seen_states);
 
-        int *bad_state = malloc(sizeof(int) * N);
-        vset_example(bad_states, bad_state);
+        vset_add(bad_state_set, bad_state);
 
-        if (!vset_is_empty(bad_states)) {
-            recursive_remove_states(counter_example, bad_states, current_frame);
+        if (!vset_is_empty(bad_state_set)) {
+            recursive_remove_states(counter_example, bad_state_set, current_frame);
+
             if (!vset_is_empty(counter_example)) {
                 return false;
             }
+            vset_union(seen_states, bad_state_set);
         }
 
         // Create new frame
