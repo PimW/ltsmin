@@ -232,6 +232,27 @@ ci_invert(ci_list *dst, ci_list *src, ci_list *base)
     ci_sort(dst);
 }
 
+/**
+ * Project state to a projected state containing only the variables in proj.
+ * Example:
+ *  Input: src_state = [10, 2, 7, 4, 1] and proj = [0, 3, 4]
+ *  Output: dst_state = [10, 4, 1]
+ *
+ * @param dst_state
+ * @param src_state
+ * @param proj
+ */
+static inline void
+ci_project(int *dst_state, int *src_state, ci_list *proj)
+{
+    int j = 0;
+    for (int p = 0; p < proj->count; p++) {
+        int val = ci_get(proj, p);
+        dst_state[j] = src_state[val];
+        j++;
+    }
+}
+
 static inline void
 list_invert (ci_list *list)
 {
