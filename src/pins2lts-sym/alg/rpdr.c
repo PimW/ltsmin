@@ -76,8 +76,22 @@ insert_before(frame *list, frame *new)
     new->next = list;
     new->prev = list->prev;
 
-    new->prev->next = new;
+    if (new->prev != NULL) {
+        new->prev->next = new;
+    }
     new->next->prev = new;
+}
+
+void
+insert_after(frame *list, frame *new)
+{
+    new->next = list->next;
+    new->prev = list;
+
+    new->prev->next = new;
+    if (new->next != NULL) {
+        new->next->prev = new;
+    }
 }
 
 /**
@@ -86,8 +100,6 @@ insert_before(frame *list, frame *new)
 vset_t
 post(vset_t dst, vset_t source, vset_t universe)
 {
-    Printf(info, "total_proj size: %d\n", total_proj->count);
-    ci_print(total_proj);
     add_step(false, dst, source, universe);
 }
 
@@ -97,8 +109,6 @@ post(vset_t dst, vset_t source, vset_t universe)
 vset_t
 pre(vset_t dst, vset_t source, vset_t universe)
 {
-    Printf(info, "total_proj size: %d\n", total_proj->count);
-    ci_print(total_proj);
     add_step(true, dst, source, universe);
 }
 
@@ -113,7 +123,7 @@ get_bad_states(vset_t bad_states, vset_t universe, vset_t P)
     vset_minus(bad_states, P);
 }
 
-void
+bool
 get_bad_state(int *state, vset_t universe, vset_t P, vset_t seen)
 {
     vset_t unseen_states = empty();
@@ -122,9 +132,13 @@ get_bad_state(int *state, vset_t universe, vset_t P, vset_t seen)
     vset_minus(unseen_states, P);
     vset_minus(unseen_states, seen);
 
-    vset_example(unseen_states, state);
+    if (!vset_is_empty(unseen_states)) {
+        vset_example(unseen_states, state);
+        return true;
+    }
 
     vset_destroy(unseen_states);
+    return false;
 }
 
 /**
@@ -138,11 +152,11 @@ contains_initial(vset_t states)
     vset_copy(tmp, states);
     vset_intersect(tmp, g_initial);
 
-    bool result = (vset_is_empty(tmp) >= 0);
+    bool result = (bool)vset_is_empty(tmp);
 
     vset_destroy(tmp);
 
-    return result;
+    return !result;
 }
 
 /**
@@ -154,7 +168,7 @@ is_relative_inductive(vset_t states, frame *f)
 {
     vset_t tmp = empty();
 
-    post(tmp, f->states, states); // Post(prev(current_frame).states) /\ states
+    post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states // TODO: check if prev is faster
 
     return (bool) vset_is_empty(tmp); // == 0
 }
@@ -170,44 +184,48 @@ is_relative_inductive(vset_t states, frame *f)
  * @param current_frame
  */
 void
-generalize(vset_t states, frame *current_frame)
+generalize(vset_t result_states, int* state, frame *current_frame)
 {
     ci_list *projection = ci_create((size_t)total_proj->count); // TODO: add size of base/full projection
     ci_list *tmp_projection = ci_create((size_t)total_proj->count);
 
-    Warning(info, "Generalize: ");
-    Printf(info, "total_proj size: %d\n", total_proj->count);
-    ci_print(total_proj);
+    vset_clear(result_states);
+    vset_add(result_states, state);
+
     ci_copy(projection, total_proj);
-    Printf(info, "proj size: %d\n", total_proj->count);
 
     vset_t generalized_states = empty();
-    vset_t total_generalized_states = empty();
 
-    for (int i = 0; i < nGrps; i++) {
+    assert(!contains_initial(result_states));
+    assert(is_relative_inductive(result_states, current_frame));
+
+    //for (int i = 0; i < nGrps; i++) {
+    for (int i = 0; i < N; i++) {
         ci_copy(tmp_projection, projection);
-        ci_minus(tmp_projection, r_projs[i]);
+        ci_remove(tmp_projection, ci_find(tmp_projection, i));
+        //ci_minus(tmp_projection, r_projs[i]);
 
-        Printf(info, "tmp projection: \n");
-        ci_print(tmp_projection);
 
-        // Compute generalized states s.t. G = U /\ proj(S)
-        vset_copy_match_set(generalized_states, g_universe, states, tmp_projection->count, tmp_projection->data);
+        // Project the bad state to a state defined only on the vars in the projection
+        int *projected_state = malloc(sizeof(int) * tmp_projection->count);
+        ci_project(projected_state, state, tmp_projection);
+
+        assert(!vset_is_empty(result_states));
+
+        vset_copy_match(generalized_states, g_universe, tmp_projection->count, tmp_projection->data, projected_state);
+        assert(!vset_is_empty(generalized_states));
 
         if (!contains_initial(generalized_states)
             && is_relative_inductive(generalized_states, current_frame)) {
-            Warning(info, ">> generalizing states succeeded");
-            vset_copy(states, total_generalized_states);
             ci_copy(projection, tmp_projection);
         }
     }
+    vset_copy(result_states, generalized_states);
 
     vset_destroy(generalized_states);
-    vset_destroy(total_generalized_states);
 
     ci_free(projection);
     ci_free(tmp_projection);
-    Warning(info, "End generalize");
 }
 
 vset_t invariant_states;
@@ -231,15 +249,6 @@ propagate_removed_states(frame *frame)
             vset_copy(invariant_states, f->states);
             return true;
         }
-        Warning(info, ">> f:");
-        vset_count_info(f->states);
-
-        Warning(info, ">> f->prev:");
-        vset_count_info(f->prev->states);
-
-        vset_intersect(f->prev->states, f->states);
-        Warning(info, ">> new f->prev:");
-        vset_count_info(f->prev->states);
         f = f->prev;
     }
 }
@@ -278,6 +287,7 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
     vset_clear(bad_states);
 
     if (frame_is_initial(current_frame)) {
+        Warning(info, "Recursive remove states: reached initial frame..");
         vset_intersect(unvisited_states, current_frame->states);
         vset_copy(counter_example, unvisited_states);
         return;
@@ -310,6 +320,8 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
             // states of the previous frame to find the non-relative inductive states in this frame.
             // and remove these from the previous relative inductive states to find the states
             // that are still relative inductive and add them for forward propagation.
+            assert(current_frame != NULL);
+            assert(current_frame->next != NULL);
             pre(propagated_states, current_frame->next->states, new_bad_states);
             vset_minus(new_bad_states, propagated_states);
 
@@ -322,7 +334,7 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
         // (otherwise a counterexample would have been found)
 
         // it is now necessary to generalize the state as far as possible.
-        generalize(state_set, current_frame);
+        generalize(state_set, state, current_frame);
 
         // remove states not reachable from previous frame from current frame
         vset_minus(current_frame->states, state_set);
@@ -336,6 +348,8 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
         // clear state set so we can add a new state in the next iteration
         vset_clear(state_set);
     }
+
+    assert(!vset_is_empty(bad_states));
 
     vset_destroy(propagated_states);
     vset_destroy(new_bad_states);
@@ -374,12 +388,15 @@ pdr(vset_t I, vset_t P, vset_t universe)
     frame_initial->states = I;
 
     frame *total = RTmallocZero (sizeof(frame));
-    total->states = universe;
+
+    vset_t total_states = empty();
+    vset_copy(total_states, universe);
+    total->states = total_states;
 
     frame_initial->next = total;
     total->prev = frame_initial;
 
-    frame *current_frame = frame_initial;
+    frame *current_frame = total;
 
     vset_t bad_state_set = empty();
     vset_t seen_states = empty();
@@ -387,15 +404,44 @@ pdr(vset_t I, vset_t P, vset_t universe)
 
     int *bad_state = malloc(sizeof(int) * N);
 
+    vset_count_info(I);
+    vset_count_info(P);
+    vset_count_info(universe);
+    vset_count_info(total->states);
+
+    bool has_bad_state;
     int depth = 0;
     while(true) {
-
         Warning(info, "Checking depth %d", depth);
-        get_bad_state(bad_state, universe, P, seen_states);
+        Warning(info, "states seen until now: ");
+        vset_count_info(seen_states);
+        has_bad_state = get_bad_state(bad_state, universe, P, seen_states);
+
+        if (!has_bad_state) {
+            Warning(info, "creating new frame");
+            // Create new frame
+            frame* new_frame = RTmallocZero (sizeof(frame));
+            new_frame->states = empty();
+            assert(!vset_is_empty(universe));
+            vset_copy(new_frame->states, universe);
+
+            insert_after(total, new_frame);
+            vset_clear(seen_states);
+
+            current_frame = total;
+            total = new_frame;
+
+            vset_count_info(current_frame->states);
+            vset_count_info(total->states);
+            depth++;
+            continue;
+        }
 
         vset_add(bad_state_set, bad_state);
+        assert(!contains_initial(bad_state_set));
 
         if (!vset_is_empty(bad_state_set)) {
+            Warning(info, "Calling recursive remove states..");
             recursive_remove_states(counter_example, bad_state_set, current_frame);
 
             if (!vset_is_empty(counter_example)) {
@@ -404,18 +450,15 @@ pdr(vset_t I, vset_t P, vset_t universe)
             vset_union(seen_states, bad_state_set);
         }
 
-        // Create new frame
-        current_frame = RTmallocZero (sizeof(frame));
-        current_frame->states = empty();
-        vset_copy(current_frame->states, total->states);
+        vset_clear(bad_state_set);
 
-        insert_before(total, current_frame);
-
-        depth++;
+        Warning(info, "Propagate removed states..");
         // Propagate removed states backwards
         if (propagate_removed_states(total->prev)) {
             // All code beyond this is just verifying the invariant
             Warning(info, "Verifying invariant: ");
+
+            assert(!vset_is_empty(invariant_states));
 
             vset_t inv = empty();
             Warning(info, "Checking inductiveness...");
@@ -423,9 +466,11 @@ pdr(vset_t I, vset_t P, vset_t universe)
             vset_minus(inv, invariant_states);
 
             Warning(info, "Checking soundness...");
-            vset_minus(invariant_states, P);
+            vset_t tmp_invariant_states = empty();
+            vset_copy(tmp_invariant_states, invariant_states);
+            vset_minus(tmp_invariant_states, P);
 
-            if (vset_is_empty(inv) && vset_is_empty(invariant_states)) {
+            if (vset_is_empty(inv) && vset_is_empty(tmp_invariant_states)) {
                 Warning(info, "invariant found");
                 vset_count_info(invariant_states);
                 return true;
