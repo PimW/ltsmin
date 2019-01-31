@@ -273,7 +273,10 @@ set_copy_match(vset_t dst, vset_t src, int p_len, int *proj, int *match)
         for (int i=0; i<vector_size; i++) {
             if (k == p_len) break; // end of match
             if (src->k == -1 || src->proj[j] == i) {
-                if (proj[k] == i) meta[j++] = 1;
+                if (proj[k] == i) {
+                    meta[j++] = 1;
+                    k++;
+                }
                 else meta[j++] = 0;
             }
         }
@@ -302,7 +305,10 @@ set_copy_match_set(vset_t dst, vset_t src, vset_t match, int p_len, int *proj)
         for (int i=0; i<vector_size; i++) {
             if (k == p_len) break; // end of match
             if (src->k == -1 || src->proj[j] == i) {
-                if (proj[k] == i) meta[j++] = 1;
+                if (proj[k] == i) {
+                    meta[j++] = 1;
+                    k++;
+                }
                 else meta[j++] = 0;
             }
         }
