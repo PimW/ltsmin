@@ -725,6 +725,49 @@ eval_predicate_set(ltsmin_expr_t e, ltsmin_parse_env_t env, vset_t states)
     }
 }
 
+static void vset_count_info(vset_t set)
+{
+    long count;
+    long double el;
+    vset_count_fn(set, &count, &el);
+    Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
+}
+
+
+static void
+print_state_cb_old (void *ctx, int *state)
+{
+    //Printf(info, ">");
+    for (int l = 0; l < N; l++) {
+        Printf (info, "%2d,", state[l]);
+    }
+    Printf(info, "\n");
+}
+
+static void
+Statef (log_t log, int *state, ci_list *proj)
+{
+    if (!log_active(log)) return;
+    int p = 0;
+    for (int l = 0; l < N; l++) {
+        if (p < proj->count && proj->data[p] == l) {
+            Printf (log, "%2d,", state[p]);
+            p++;
+        } else {
+            Printf (log, " *,");
+        }
+    }
+}
+
+
+void
+print_state_cb (void *context, int *src)
+{
+    int group = *(int *)context;
+    Statef (info, src, inv_proj[group]);
+    Warning (info, " (%d)\n", group);
+}
+
 /**
  * First version of the unsafe state detection function, for now assumes a single invariant for simplicity
  *
@@ -753,9 +796,6 @@ find_counter_examples(vset_t ce_states, vset_t states)
                     Warning(info, "Storing counter examples");
                     vset_minus(inv_set[i], container);
                     vset_copy_match_set(ce_states, states, inv_set[i], inv_proj[i]->count, inv_proj[i]->data);
-
-//                    vset_copy(ce_states, inv_set[i]);
-//                    vset_minus(ce_states, container);
 
                     Warning(info, " ");
                     Warning(info, "Invariant violation (%s)!", inv_detect[i]);

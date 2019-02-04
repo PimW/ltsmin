@@ -255,6 +255,8 @@ set_intersect(vset_t dst, vset_t src)
 
 /**
  * Compute the match of <src> with short vector <match> into <dst>.
+ * WARNING: The state <match> should only be defined on the variables in <proj>
+ * otherwise sylvan will compute an incorrect result LDD.
  */
 static void
 set_copy_match(vset_t dst, vset_t src, int p_len, int *proj, int *match)
@@ -288,6 +290,11 @@ set_copy_match(vset_t dst, vset_t src, int p_len, int *proj, int *match)
     }
 }
 
+/**
+ * Compute the match of <src> with a set of short vectors <match> into <dst>.
+ * WARNING: The set <match> should only be defined on the variables in <proj>
+ * otherwise sylvan will compute an incorrect result LDD.
+ */
 static void
 set_copy_match_set(vset_t dst, vset_t src, vset_t match, int p_len, int *proj)
 {
@@ -392,7 +399,7 @@ set_enum_match(vset_t set, int p_len, int *proj, int *match, vset_element_cb cb,
     for (int i=0; i<vector_size; i++) {
         if (k == p_len) break; // end of match
         if (set->k == -1 || set->proj[j] == i) {
-            if (proj[k] == i) meta[j++] = 1;
+            if (proj[k] == i) meta[j++] = 1; // TODO: probably same bug as set_copy_match
             else meta[j++] = 0;
         }
     }
@@ -486,6 +493,13 @@ set_example(vset_t set, int *e)
 {
     if (set->mdd == lddmc_false) Abort("set_example: empty set");
     lddmc_sat_one(set->mdd, (uint32_t*)e, set->size);
+}
+
+static void
+set_random(vset_t set, int *e)
+{
+    if (set->mdd == lddmc_false) Abort("set_example: empty set");
+    lddmc_sat_one_random(set->mdd, (uint32_t*)e, set->size);
 }
 
 /**
@@ -779,10 +793,11 @@ static void
 set_save(FILE* f, vset_t set)
 {
     fwrite(&set->k, sizeof(int), 1, f);
-    if (set->k != -1) fwrite(set->proj, sizeof(int), set->k, f);
+    //if (set->k != -1) fwrite(set->proj, sizeof(int), set->k, f);
     size_t mdd = lddmc_serialize_add(set->mdd);
-    lddmc_serialize_tofile(f);
-    fwrite(&mdd, sizeof(size_t), 1, f);
+    Printf(info, "MDD ID: %u\n\n\n\n", mdd);
+    lddmc_serialize_totext(f);
+    //fwrite(&mdd, sizeof(&mdd), 1, f);
 }
 
 static void
@@ -1120,6 +1135,7 @@ set_function_pointers(vdom_t dom)
     dom->shared.set_update=set_update;
     dom->shared.set_member=set_member;
     dom->shared.set_example=set_example;
+    dom->shared.set_random=set_random;
     dom->shared.set_enum=set_enum;
     dom->shared.set_enum_match=set_enum_match;
     dom->shared.set_copy_match=set_copy_match;

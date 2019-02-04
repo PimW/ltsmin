@@ -404,8 +404,6 @@ compute_full_states(vset_t initial_states, vset_t total_states)
         states = vset_create(domain, combined_projection->count, combined_projection->data);
         vset_copy(states, tmp);
 
-        vset_count_info(states, -1, -1);
-
         vset_destroy(tmp);
     }
 

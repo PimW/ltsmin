@@ -240,6 +240,8 @@ init_domain(vset_implementation_t impl) {
         ci_add(total_proj, i);
     }
 
+    ci_print(total_proj);
+
     l_projs = (ci_list **) dm_rows_to_idx_table (GBgetStateLabelInfo(model));
     for (int i = 0; i < sLbls; i++) {
 
@@ -503,29 +505,30 @@ static void actual_main(void *arg)
     if (local) {
         run_local (initial, visited);
 
-//        vset_t CE = vset_create(domain, -1, NULL);
-//
-//        Warning(info, "Extracting counter examples");
-//        find_counter_examples(CE, visited);
-//
-//        long count;
-//        long double el;
-//        vset_count_fn(CE, &count, &el);
-//        Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
-//
-//        vset_t P = vset_create(domain, -1, NULL);
-//        vset_copy(P, visited);
-//        vset_minus(P, CE);
-//
-//
-//        rt_timer_t pdr_timer;
-//        pdr_timer = RTcreateTimer();
-//        RTstartTimer(pdr_timer);
-//
-//        pdr(initial, P, visited);
-//
-//        RTstopTimer(pdr_timer);
-//        RTprintTimer(info, pdr_timer, "PDR took: ");
+        vset_t CE = vset_create(domain, -1, NULL);
+
+        Warning(info, "Extracting counter examples");
+        find_counter_examples(CE, visited);
+
+        long count;
+        long double el;
+        vset_count_fn(CE, &count, &el);
+        Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
+
+        vset_t P = vset_create(domain, -1, NULL);
+        vset_copy(P, visited);
+        vset_minus(P, CE);
+
+//        vset_copy(P, CE);
+
+        rt_timer_t pdr_timer;
+        pdr_timer = RTcreateTimer();
+        RTstartTimer(pdr_timer);
+
+        pdr(initial, P, visited);
+
+        RTstopTimer(pdr_timer);
+        RTprintTimer(info, pdr_timer, "PDR took: ");
 //        RTresetTimer(pdr_timer);
 //        RTstartTimer(pdr_timer);
 //        reverse_reach(initial, P, visited);
