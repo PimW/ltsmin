@@ -39,6 +39,10 @@
 static vset_t g_universe;
 static vset_t g_initial;
 
+rt_timer_t pdr_timer;
+rt_timer_t generalize_timer;
+rt_timer_t image_timer;
+
 /*
  * Frame linked list structure and operations
  */
@@ -190,8 +194,31 @@ is_relative_inductive(vset_t states, frame *f)
     post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states // TODO: check if prev is faster
     //pre(tmp, states, f->prev->states);
 
-    return (bool) vset_is_empty(tmp); // == 0
+    bool val =  (bool) vset_is_empty(tmp); // == 0
+    vset_destroy(tmp);
+    return val;
 }
+
+
+//bool
+//is_relative_inductive_for_var(vset_t states, frame *f, int var)
+//{
+//    vset_t          temp = empty ();
+//
+//    for (int i = 0; i < nGrps; i++) {
+//        if (ci_binary_search(w_projs[i], var) != -1) {
+//            vset_next (temp, f->prev->states, group_next[i]);
+//            vset_intersect(temp, states);
+//            if (!vset_is_empty(temp)) {
+//                vset_destroy (temp);
+//                return false;
+//            }
+//        }
+//    }
+//    vset_destroy (temp);
+//    return true;
+//}
+
 
 /**
  * Generalizes relative-inductive states to remove a bigger chunk of the state-space.
@@ -219,32 +246,10 @@ generalize(vset_t result_states, int* state, frame *current_frame)
     assert(!contains_initial(result_states));
     assert(is_relative_inductive(result_states, current_frame));
 
-//    for (int i = 0; i < nGrps; i++) {
-//    //for (int i = 0; i < N; i++) {
-//        ci_copy(tmp_projection, projection);
-//        //ci_remove(tmp_projection, ci_find(tmp_projection, i));
-//        ci_minus(tmp_projection, r_projs[i]);
-//
-//
-//        // Project the bad state to a state defined only on the vars in the projection
-//        int *projected_state = malloc(sizeof(int) * tmp_projection->count);
-//        ci_project(projected_state, state, tmp_projection);
-//
-//        assert(!vset_is_empty(result_states));
-//
-//        vset_copy_match(generalized_states, g_universe, tmp_projection->count, tmp_projection->data, projected_state);
-//        assert(!vset_is_empty(generalized_states));
-//
-//        if (!contains_initial(generalized_states)
-//            && is_relative_inductive(generalized_states, current_frame)) {
-//            ci_copy(projection, tmp_projection);
-//        }
-//    }
-
     //for (int i = 0; i < nGrps; i++) {
     for (int i = 0; i < N; i++) {
         ci_copy(tmp_projection, projection);
-        ci_remove(tmp_projection, ci_find(tmp_projection, i));
+        ci_remove(tmp_projection, ci_binary_search(tmp_projection, i));
         //ci_minus(tmp_projection, r_projs[i]);
 
 
@@ -258,6 +263,7 @@ generalize(vset_t result_states, int* state, frame *current_frame)
         assert(!vset_is_empty(generalized_states));
 
         if (!contains_initial(generalized_states)
+            // && is_relative_inductive_for_var(generalized_states, current_frame, i)) {
             && is_relative_inductive(generalized_states, current_frame)) {
             ci_copy(projection, tmp_projection);
             vset_copy(result_states, generalized_states);
@@ -393,7 +399,12 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
             // that are still relative inductive and add them for forward propagation.
             assert(current_frame != NULL);
             assert(current_frame->next != NULL);
+
+            RTstartTimer(image_timer);
+
             pre(propagated_states, current_frame->next->states, new_bad_states);
+            RTstopTimer(image_timer);
+
             vset_minus(new_bad_states, propagated_states);
 
             vset_minus(current_frame->states, new_bad_states);
@@ -404,8 +415,11 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
         // after the recursive step removed all states from the pre-image from the previous frame
         // (otherwise a counterexample would have been found)
 
+
+        RTstartTimer(generalize_timer);
         // it is now necessary to generalize the state as far as possible.
         generalize(state_set, state, current_frame);
+        RTstopTimer(generalize_timer);
 
         // remove states not reachable from previous frame from current frame
         vset_minus(current_frame->states, state_set);
@@ -452,9 +466,13 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
  * @return true <=> an invariant is found, false <=> a counter-example is found.
  */
 bool
-pdr(vset_t I, vset_t P, vset_t universe)
+property_directed_reachability(vset_t I, vset_t P, vset_t universe)
 {
     Warning(info, "Initialize PDR");
+
+    pdr_timer = RTcreateTimer();
+    generalize_timer = RTcreateTimer();
+    image_timer = RTcreateTimer();
 
     g_universe = universe;
     g_initial = I;
@@ -489,6 +507,7 @@ pdr(vset_t I, vset_t P, vset_t universe)
     int depth = 0;
     Warning(info, "[pdr] Checking depth %d", depth);
     while(true) {
+        RTstartTimer(pdr_timer);
 //        Warning(info, "pdr: Checking depth %d", depth);
 //        Warning(info, "pdr: States seen until now: ");
 //        vset_count_info(seen_states);
@@ -498,6 +517,16 @@ pdr(vset_t I, vset_t P, vset_t universe)
 //        Printf(info, "\n");
 
         if (!has_bad_state) {
+            RTstopTimer(pdr_timer);
+
+            RTprintTimer(info, pdr_timer, "pdr time: ");
+            RTprintTimer(info, generalize_timer, "generalize time: ");
+            RTprintTimer(info, image_timer, "pre-image time: ");
+
+            RTresetTimer(pdr_timer);
+            RTresetTimer(image_timer);
+            RTresetTimer(generalize_timer);
+
             print_frame_sizes(total);
             Warning(info, "[pdr] Creating new frame");
             // Create new frame
@@ -551,6 +580,7 @@ pdr(vset_t I, vset_t P, vset_t universe)
             if (vset_is_empty(inv) && vset_is_empty(tmp_invariant_states)) {
                 Warning(info, "pdr: invariant found");
                 vset_count_info(invariant_states);
+                vset_copy(universe, invariant_states);
                 return true;
             } else {
                 Warning(info, "pdr: error");
@@ -561,17 +591,23 @@ pdr(vset_t I, vset_t P, vset_t universe)
 }
 
 
+vset_t bad_states;
+
 bool
 reverse_reach(vset_t I, vset_t P, vset_t U)
 {
+    if (bad_states == NULL) {
+        bad_states = empty();
+    }
+
     vset_t V_old = vset_create(domain, -1, NULL);
     vset_t V = vset_create(domain, -1, NULL);
 
     get_bad_states(V, U, P);
+    vset_union(V, bad_states);
 
     int level = 0;
     while (!vset_equal(V_old, V)) {
-        Warning(info, "level: %d", level);
         vset_copy(V_old, V);
         pre(V, V, U);
         level++;
@@ -579,10 +615,13 @@ reverse_reach(vset_t I, vset_t P, vset_t U)
 
     vset_minus(V_old, I);
     if (!vset_equal(V_old, V)) {
-        Warning(info, "Counter example found");
-    } else {
-        Warning(info, "Found invariant");
+        return false;
     }
+
+    vset_copy(U, V);
+    vset_copy(bad_states, V);
+
+    return true;
 }
 
 

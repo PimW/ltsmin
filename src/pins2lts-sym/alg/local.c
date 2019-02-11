@@ -244,38 +244,12 @@ print_next_state (void *context, int *src)
 static void
 explore_cb (void *context, int *src)
 {
-    clock_t t1, t2;
-    t1 = clock();
-    long elapsed;
-
-    explored++;
     group_add_t         ctx;
     ctx.group = *(int *)context;
-    int src_long[N];
     ctx.src = src;
-    //print_state_r(&ctx.group, src);
 
     GBgetTransitionsShortR2W (model, ctx.group, src, group_add_old, &ctx);
-    //explored++;
-
-
-//    ci_list *row = rrows[ctx.group];
-//    for (int i = 0; i < row->count; i++) {
-//        src_long[ci_get(row,i)] = src[i];
-//    }
-//    guard_t *gs = GBgetGuard(model, ctx.group);
-//    for (int i = 0; i < gs->count; i++) {
-//        int g = gs->guard[i];
-//        int v = GBgetStateLabelLong(model, g, src_long);
-//        if (v == 0 || v == 2) return; // group disabled or won't evaluate
-//        // (the state is unreachable assuming absence of modeling errors.)
-//        if (v == 2) HREassert(false);
-//    }
-//    GBgetActionsLong(model, ctx.group, src_long, group_add, &ctx);
-
-    t2 = clock();
-    elapsed = t2 - t1;
-    //Warning(info, "elapsed: %ld ms\n", elapsed);
+    explored++;
 }
 
 static void vset_count_info(vset_t set, int group,  int level)
@@ -338,45 +312,6 @@ static void recombine_new_states_for_group (int i)
     }
 }
 
-void add_states_from_group_to_group(int i, int dest)
-{
-
-    write_group_t *wg = &writers[i];
-    for (reader_t *r = r_bgn(wg); r <  r_end(wg); r++) {
-        int j = r->index;
-        if (j == dest) {
-            if (r->tmp == NULL) { // writer's domain overlaps reader
-                vset_project (X_r[j], Q_w[i]);
-                //vset_minus   (X_r[j], V_r[j]);
-                long n1;
-                long double e1;
-                vset_count_fn (X_r[j], &n1, &e1);
-                if (e1 > 0)
-                Warning (infoLong, "_ X _ === _ --> %.0Lf\t\t%d>%d", e1, i, j);
-
-                vset_union   (Y_r[j], X_r[j]);
-                vset_clear   (X_r[j]);
-            } else {
-                long n1, n2, n3, n4;
-                long double e1, e2, e3, e4;
-
-                vset_project(r->tmp, Q_w[i]); // r_j w_i (Post(Q_r[i]))
-                vset_count_fn (r->tmp, &n1, &e1);
-                if (e1 != 0) {
-                    vset_project        (r->complement, V_r[j]);    // r_j -w_i (V_r[i])
-
-                    vset_join (X_r[j], r->complement, r->tmp);
-
-                    vset_union          (Y_r[j],        X_r[j]);
-
-                    vset_clear (X_r[j]);
-                    vset_clear (r->complement);
-                }
-                vset_clear (r->tmp);
-            }
-        }
-    }
-}
 
 void
 compute_full_states(vset_t initial_states, vset_t total_states)
@@ -386,12 +321,12 @@ compute_full_states(vset_t initial_states, vset_t total_states)
 
     ci_union(combined_projection, r_projs[0]);
 
+    vset_t states = vset_create(domain, combined_projection->count, combined_projection->data);
+    vset_t tmp;
+
     Warning(info, "Computing full states...");
 
-    vset_t states = vset_create(domain, combined_projection->count, combined_projection->data);
     vset_copy(states, V_r[0]);
-
-    vset_t tmp;
 
     for(int i = 1; i <nGrps; i++) {
         ci_union(combined_projection, r_projs[i]);
@@ -416,74 +351,68 @@ compute_full_states(vset_t initial_states, vset_t total_states)
 
     vset_join(total_states, tmp, states);
 
-    vset_destroy(states);
-}
-
-void
-compute_full_level(vset_t visited, vset_t total_queue)
-{
-    ci_list *combined_projection = ci_create((size_t)N);
-
-    ci_union(combined_projection, w_projs[0]);
-
-    vset_t states = vset_create(domain, combined_projection->count, combined_projection->data);
-    vset_copy(states, Q_w[0]);
-
-    vset_t tmp;
-
-    for(int i = 1; i <nGrps; i++) {
-        if (!vset_is_empty(Q_w[i])) {
-            ci_union(combined_projection, w_projs[i]);
-
-            tmp = vset_create(domain, combined_projection->count, combined_projection->data);
-            vset_join(tmp, states, Q_w[i]);
-
-            vset_clear(states);
-            states = vset_create(domain, combined_projection->count, combined_projection->data);
-            vset_copy(states, tmp);
-
-            vset_destroy(tmp);
-        }
-    }
-
-    ci_list *compl_proj = ci_create((size_t)N);
-    ci_copy(compl_proj, total_proj);
-    ci_minus(compl_proj, combined_projection);
-
-    if (compl_proj->count > 0) {
-        vset_t compl_set = vset_create(domain, compl_proj->count, compl_proj->data);
-
-        vset_project(compl_set, visited);
-
-        vset_join(total_queue, compl_set, states);
-
-        vset_destroy(compl_set);
-    }  else {
-        vset_join(total_queue, states, states);
-    }
-
     ci_free(combined_projection);
-    ci_free(compl_proj);
+    ci_free(complement_proj);
+
     vset_destroy(states);
+    vset_destroy(tmp);
 }
+
+bool
+refine_visited_set(vset_t I, vset_t visited)
+{
+    // Extract counter examples and refine visited set
+    vset_t P = vset_create(domain, -1, NULL);
+    vset_t CE = vset_create(domain, -1, NULL);
+
+    find_counter_examples(CE, visited);
+
+    if (!vset_is_empty(CE)) {
+        vset_copy(P, visited);
+        vset_minus(P, CE);
+        if (refine_strategy == PDR || refine_strategy == PDR_INTERLEAVED) {
+            Warning(info, "Refining with PDR");
+            if(!property_directed_reachability(I, P, visited)) {
+                Warning(info, "Refinement found a counter example!");
+                return false;
+            }
+        } else if (refine_strategy == REV_REACH || refine_strategy == REV_REACH_INTERLEAVED) {
+            Warning(info, "Refining with reverse reachability");
+            if(!reverse_reach(I, P, visited)) {
+                Warning(info, "Refinement found a counter example!");
+                return false;
+            }
+        }
+
+    }
+
+    vset_destroy(P);
+    vset_destroy(CE);
+
+    return true;
+}
+
 
 int
-reach_local_full(vset_t I, vset_t V)
+compositional_reachability_full(vset_t I, vset_t V)
 {
     int                 level = 0;
+    int                 explored_old = 0;
     bool                all_done;
 
     Warning(info, "Running compositional reachability with full state space computation...");
 
     vset_t total_queue = vset_create(domain, -1, NULL);
     vset_t V_old = vset_create(domain, -1, NULL);
+
     vset_copy(V, I);
 
     do { // while \exists_i \in [1..K] : Q^r_i != 0 do
         level++;
         all_done = true;
 
-        Warning(info, "Approx Reach level: %d", level);
+        Warning(info, "Level: %d", level);
+        explored_old = explored;
         for (int i = 0; i < nGrps; i++) {
             //write_group_t      *wg = &writers[i];
             vset_clear   (Q_w[i]);
@@ -494,6 +423,8 @@ reach_local_full(vset_t I, vset_t V)
 
             recombine_new_states_for_group(i);
         }
+
+        Warning(info, "Explored %d new states (total %d)", (explored - explored_old), explored);
 
         //vset_reorder (domain);
 
@@ -513,6 +444,10 @@ reach_local_full(vset_t I, vset_t V)
 
         compute_full_states(I, V);
 
+        if (refine_strategy == PDR_INTERLEAVED || refine_strategy == REV_REACH_INTERLEAVED) {
+            refine_visited_set(I, V);
+        }
+
         all_done = (bool)vset_equal(V, V_old);
 
         vset_copy(total_queue, V);
@@ -520,23 +455,20 @@ reach_local_full(vset_t I, vset_t V)
 
         for (int i = 0; i < nGrps; i++) {
             vset_project(Q_r[i], V);
-            //vset_project(N_r[i], total_queue);
-            if (all_done) {
-                vset_count_info(Q_r[i], i, level);
-                vset_count_info(N_r[i], i, level);
-            }
-            //vset_enum(Q_r[i], print_state_r, &i);
         }
 
     } while (!all_done);
 
-    Warning(info, "Next state called %d times!", explored)
+    Warning(info, "Next state called %d times!", explored);
 
-    vset_count_info(V, -1, level);
+    vset_destroy(total_queue);
+    vset_destroy(V_old);
+
+    return level;
 }
 
 int
-reach_local (vset_t I, vset_t V)
+compositional_reachability (vset_t I, vset_t V)
 {
     int                 level = 0;
     int                 explored_old = 0;
@@ -713,7 +645,7 @@ find_domain_intersections ()
 }
 
 void
-init_local (vset_t I)
+init_comp_reach(vset_t I)
 {
     if (HREme (HREglobal()) == 0) {
         X = vset_create (domain, -1, NULL);
@@ -781,7 +713,7 @@ init_local (vset_t I)
 }
 
 void
-deinit_local ()
+deinit_comp_reach()
 {
     if (HREme (HREglobal()) == 0) {
         vset_destroy (X);
@@ -816,36 +748,33 @@ deinit_local ()
 }
 
 void
-print_local (vset_t V, int level)
+print_comp_reach(vset_t V, int level)
 {
-    RTprintTimer (info, reach_timer, "Local reach took");
+    RTprintTimer (info, reach_timer, "Compositional reachability took");
     long int n;
     double e;
     vset_count (V, &n, &e);
-    Warning (info, "Local Levels: %d, nodes: %d, states: %.0f", level, n, e);
+    Warning (info, "Compositional Levels: %d, nodes: %d, states: %.0f", level, n, e);
 }
 
 void
-run_local (vset_t I, vset_t V)
+run_compositional_reachability (vset_t I, vset_t V)
 {
-    Warning (info, "Localized [0]");
-
-    init_local (I);
+    init_comp_reach(I);
 
     int level;
 
     RTstartTimer(reach_timer);
     if (sat_strategy == SAT) {
-        Abort("Local reach does not support saturation");
+        Abort("Compositional reachability does not support saturation");
     } else {
-        level = reach_local (I, V);
+        level = compositional_reachability_full(I, V);
     }
-
     RTstopTimer(reach_timer);
 
-    print_local (V, level);
+    print_comp_reach(V, level);
 
-    deinit_local ();
+    deinit_comp_reach();
 
     final_final_stats_reporting ();
 

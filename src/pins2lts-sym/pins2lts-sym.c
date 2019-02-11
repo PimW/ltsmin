@@ -503,37 +503,48 @@ static void actual_main(void *arg)
     check_invariants(visited, 0);
 
     if (local) {
-        run_local (initial, visited);
+        run_compositional_reachability (initial, visited);
 
-        vset_t CE = vset_create(domain, -1, NULL);
+        if (refine_strategy == PDR || refine_strategy == REV_REACH) {
+            if (refine_visited_set(initial, visited)) {
+                Warning(info, "Found invariant");
+            }
+        }
 
-        Warning(info, "Extracting counter examples");
-        find_counter_examples(CE, visited);
+        //vset_t CE = vset_create(domain, -1, NULL);
 
-        long count;
-        long double el;
-        vset_count_fn(CE, &count, &el);
-        Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
 
-        vset_t P = vset_create(domain, -1, NULL);
-        vset_copy(P, visited);
-        vset_minus(P, CE);
+
+//        Warning(info, "Extracting counter examples");
+//        find_counter_examples(CE, visited);
+//
+//        if (!vset_is_empty(CE)) {
+//            long count;
+//            long double el;
+//            vset_count_fn(CE, &count, &el);
+//            Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
+//
+//            vset_t P = vset_create(domain, -1, NULL);
+//            vset_copy(P, visited);
+//            vset_minus(P, CE);
 
 //        vset_copy(P, CE);
-
-        rt_timer_t pdr_timer;
-        pdr_timer = RTcreateTimer();
-        RTstartTimer(pdr_timer);
-
-        pdr(initial, P, visited);
-
-        RTstopTimer(pdr_timer);
-        RTprintTimer(info, pdr_timer, "PDR took: ");
-//        RTresetTimer(pdr_timer);
+//
+//            rt_timer_t pdr_timer;
+//            pdr_timer = RTcreateTimer();
 //        RTstartTimer(pdr_timer);
-//        reverse_reach(initial, P, visited);
+//
+//        property_directed_reachability(initial, P, visited);
+//
 //        RTstopTimer(pdr_timer);
-//        RTprintTimer(info, pdr_timer, "Reverse reach took: ");
+//        RTprintTimer(info, pdr_timer, "PDR took: ");
+////        RTresetTimer(pdr_timer);
+//            RTstartTimer(pdr_timer);
+//            reverse_reach(initial, P, visited);
+//            RTstopTimer(pdr_timer);
+//            RTprintTimer(info, pdr_timer, "Reverse reach took: ");
+        //}
+
     } else {
         /* run reachability */
         run_reachability(visited, files[1]);

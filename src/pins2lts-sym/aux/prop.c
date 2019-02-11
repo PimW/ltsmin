@@ -777,36 +777,35 @@ inline void
 find_counter_examples(vset_t ce_states, vset_t states)
 {
     // Only check if not all invariant have been violated and there are states
-    if (num_inv_violated != num_inv && !vset_is_empty(states)) {
+    if (!vset_is_empty(states)) {
         int iv = 0;
         // For each invariant
         for (int i = 0; i < num_inv; i++) {
             // Check if it was already violated
-            if (!inv_violated[i]) {
-                vset_project(inv_set[i], states);
-                // Make copy of the invariant set
-                vset_t container = ((struct inv_info_s*) inv_expr[i]->context)->container;
-                vset_copy(container, inv_set[i]);
-                // Evaluate the invariant expression on the container set (in the expression context)
-                eval_predicate_set(inv_expr[i], inv_parse_env[i], states);
-                // Compare the original projected states set with the states
-                Warning(info, "equality check");
-                if (!vset_equal(inv_set[i], container)) {
+            //if (!inv_violated[i]) {
+            vset_project(inv_set[i], states);
+            // Make copy of the invariant set
+            vset_t container = ((struct inv_info_s*) inv_expr[i]->context)->container;
+            vset_copy(container, inv_set[i]);
+            // Evaluate the invariant expression on the container set (in the expression context)
+            eval_predicate_set(inv_expr[i], inv_parse_env[i], states);
+            // Compare the original projected states set with the states
+            Warning(info, "equality check");
+            if (!vset_equal(inv_set[i], container)) {
 
-                    Warning(info, "Storing counter examples");
-                    vset_minus(inv_set[i], container);
-                    vset_copy_match_set(ce_states, states, inv_set[i], inv_proj[i]->count, inv_proj[i]->data);
+                Warning(info, "Storing counter examples");
+                vset_minus(inv_set[i], container);
+                vset_copy_match_set(ce_states, states, inv_set[i], inv_proj[i]->count, inv_proj[i]->data);
 
-                    Warning(info, " ");
-                    Warning(info, "Invariant violation (%s)!", inv_detect[i]);
-                    Warning(info, " ");
-                    inv_violated[i] = 1;
-                    iv = 1;
-                    num_inv_violated++;
+                Warning(info, " ");
+                Warning(info, "Invariant violation (%s)!", inv_detect[i]);
+                Warning(info, " ");
+                inv_violated[i] = 1;
+                iv = 1;
+                num_inv_violated++;
                 }
-            }
+            //}
         }
-        if (iv) inv_cleanup();
     }
 }
 

@@ -21,6 +21,8 @@ sat_strategy_t sat_strategy = NO_SAT;
 
 guide_strategy_t guide_strategy = UNGUIDED;
 
+refine_strategy_t refine_strategy = REV_REACH;
+
 char** ctl_star_formulas = NULL;
 char** ctl_formulas = NULL;
 char** ltl_formulas = NULL;
@@ -100,6 +102,16 @@ static si_map_entry GUIDED[] = {
     {NULL, 0}
 };
 
+static char* refine = "none";
+static si_map_entry REFINE[] = {
+        {"none", NO_REFINE},
+        {"reverse-reach", REV_REACH},
+        {"reverse-reach-interleaved", REV_REACH_INTERLEAVED},
+        {"pdr", PDR},
+        {"pdr-interleaved", PDR_INTERLEAVED},
+        {NULL, 0}
+};
+
 static const char invariant_long[]="invariant";
 static const char ctl_star_long[]="ctl-star";
 static const char ctl_long[]="ctl";
@@ -145,6 +157,15 @@ reach_popt(poptContext con, enum poptCallbackReason reason,
             Warning(info, "Guided search strategy is %s", guidance);
         }
         guide_strategy = res;
+
+        res = linear_search(REFINE, refine);
+        if (res < 0) {
+            Warning(error, "unknown guided search strategy %s", guidance);
+            HREexitUsage(LTSMIN_EXIT_FAILURE);
+        } else if (HREme(HREglobal())==0) {
+            Warning(info, "Guided search strategy is %s", guidance);
+        }
+        refine_strategy = res;
 
         if (trc_output != NULL && !dlk_detect && act_detect == NULL && HREme(HREglobal())==0)
             Warning(info, "Ignoring trace output");
@@ -221,6 +242,7 @@ struct poptOption options[] = {
     { "trim" , 0 , POPT_ARG_VAL , &trimming , 1 , "apply trimming on SCCs" , NULL },
     { "scc" , 0 , POPT_ARG_INT , &sccs , 0 , "detect sccs" , NULL },
     { "local" , 0 , POPT_ARG_VAL , &local , 1 , "Use local group exploration to learn transition relations." , NULL },
+    { "refine-strategy" , 0, POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT , &refine , 0 , "select the refinement strategy" , "<none|reverse-reach|reverse-reach-interleaved|pdr|pdr-interleaved>" },
     { "action" , 0 , POPT_ARG_STRING , &act_detect , 0 , "detect action prefix" , "<action prefix>" },
     { invariant_long , 'i' , POPT_ARG_STRING , NULL , 0, "detect invariant violations (can be given multiple times)", NULL },
     { "no-exit", 'n', POPT_ARG_VAL, &no_exit, 1, "no exit on error, just count (for error counters use -v)", NULL },

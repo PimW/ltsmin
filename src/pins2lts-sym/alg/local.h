@@ -17,8 +17,10 @@
  * --- Speedier PINS transition learning
  * --- CEGAR
  * --- Extraction POR relations (which can be overestimated)
+ * --- Property Directed Reachability
  */
+extern void run_compositional_reachability (vset_t I, vset_t V);
 
-extern void run_local (vset_t I, vset_t V);
+extern bool refine_visited_set(vset_t I, vset_t V);
 
 #endif //ALG_LOCAL_H

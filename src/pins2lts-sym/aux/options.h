@@ -45,6 +45,10 @@ typedef enum { NO_SAT, SAT_LIKE, SAT_LOOP, SAT_FIX, SAT } sat_strategy_t;
 
 extern sat_strategy_t sat_strategy;
 
+typedef enum { NO_REFINE, REV_REACH, PDR, REV_REACH_INTERLEAVED, PDR_INTERLEAVED } refine_strategy_t;
+
+extern refine_strategy_t refine_strategy;
+
 typedef enum { UNGUIDED, DIRECTED } guide_strategy_t;
 
 extern guide_strategy_t guide_strategy;

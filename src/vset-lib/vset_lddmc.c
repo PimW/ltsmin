@@ -498,7 +498,7 @@ set_example(vset_t set, int *e)
 static void
 set_random(vset_t set, int *e)
 {
-    if (set->mdd == lddmc_false) Abort("set_example: empty set");
+    if (set->mdd == lddmc_false) Abort("set_random: empty set");
     lddmc_sat_one_random(set->mdd, (uint32_t*)e, set->size);
 }
 
