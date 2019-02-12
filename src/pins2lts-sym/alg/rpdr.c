@@ -64,7 +64,6 @@ print_state (int *state)
 static void
 print_state_cb (void *ctx, int *state)
 {
-    //Printf(info, ">");
     for (int l = 0; l < N; l++) {
         Printf (info, "%2d,", state[l]);
     }
@@ -191,33 +190,12 @@ is_relative_inductive(vset_t states, frame *f)
 {
     vset_t tmp = empty();
 
-    post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states // TODO: check if prev is faster
-    //pre(tmp, states, f->prev->states);
+    post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states
 
     bool val =  (bool) vset_is_empty(tmp); // == 0
     vset_destroy(tmp);
     return val;
 }
-
-
-//bool
-//is_relative_inductive_for_var(vset_t states, frame *f, int var)
-//{
-//    vset_t          temp = empty ();
-//
-//    for (int i = 0; i < nGrps; i++) {
-//        if (ci_binary_search(w_projs[i], var) != -1) {
-//            vset_next (temp, f->prev->states, group_next[i]);
-//            vset_intersect(temp, states);
-//            if (!vset_is_empty(temp)) {
-//                vset_destroy (temp);
-//                return false;
-//            }
-//        }
-//    }
-//    vset_destroy (temp);
-//    return true;
-//}
 
 
 /**
@@ -246,7 +224,6 @@ generalize(vset_t result_states, int* state, frame *current_frame)
     assert(!contains_initial(result_states));
     assert(is_relative_inductive(result_states, current_frame));
 
-    //for (int i = 0; i < nGrps; i++) {
     for (int i = 0; i < N; i++) {
         ci_copy(tmp_projection, projection);
         ci_remove(tmp_projection, ci_binary_search(tmp_projection, i));
@@ -269,8 +246,6 @@ generalize(vset_t result_states, int* state, frame *current_frame)
             vset_copy(result_states, generalized_states);
         }
     }
-//    Warning(info, "[generalize] generalized states count: ");
-//    vset_count_info(result_states);
 
     vset_destroy(generalized_states);
 
@@ -294,9 +269,6 @@ propagate_removed_states(frame *frame)
 
     int i = 0;
     while (f->prev != NULL) {
-        //Warning(info, "[propagate_remove_states] frame %d size:", i);
-        //vset_count_info(f->states);
-
         vset_intersect(f->prev->states, f->states);
         if (vset_equal(f->prev->states, f->states)) {
             Warning(info, "propagate_removed_states: found invariant")
@@ -316,7 +288,6 @@ print_frame_sizes(frame *frame)
     struct frame *f = frame;
 
     int i = 0;
-    // TODO: output frame sizes
     while (f->prev != NULL) {
         Warning(info, "[print_frame_sizes] frame %d size:", i);
         vset_count_info(f->states);
@@ -354,8 +325,6 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
 
     vset_t unvisited_states = empty();
     vset_copy(unvisited_states, bad_states);
-    //Warning(info, "[recursive_remove_states] Initial unvisited state count: ");
-    //vset_count_info(unvisited_states);
 
     // Clear bad states and use it as the return set for forward propagation
     vset_clear(bad_states);
@@ -429,9 +398,6 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
         // remove all states in the generalized state set from the unvisited states
         // since we know they are relative inductive.
         vset_minus(unvisited_states, state_set);
-
-//        Warning(info, "[recursive_remove_states] Unvisited states count: ");
-//        vset_count_info(unvisited_states);
 
         // clear state set so we can add a new state in the next iteration
         vset_clear(state_set);
@@ -508,13 +474,7 @@ property_directed_reachability(vset_t I, vset_t P, vset_t universe)
     Warning(info, "[pdr] Checking depth %d", depth);
     while(true) {
         RTstartTimer(pdr_timer);
-//        Warning(info, "pdr: Checking depth %d", depth);
-//        Warning(info, "pdr: States seen until now: ");
-//        vset_count_info(seen_states);
         has_bad_state = get_bad_state(bad_state, universe, P, seen_states);
-//        Warning(info, "pdr: Random bad state: ");
-//        print_state(bad_state);
-//        Printf(info, "\n");
 
         if (!has_bad_state) {
             RTstopTimer(pdr_timer);
@@ -626,11 +586,5 @@ reverse_reach(vset_t I, vset_t P, vset_t U)
 
 
 #else
-
-bool reach_reverse_pdr(vset_t I)
-{
-    Warning(info, "Couldn't find sylvan");
-    return false;
-}
 
 #endif

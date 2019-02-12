@@ -21,6 +21,12 @@
  */
 extern void run_compositional_reachability (vset_t I, vset_t V);
 
+/**
+ * TODO: update docs
+ * @param I
+ * @param V
+ * @return
+ */
 extern bool refine_visited_set(vset_t I, vset_t V);
 
 #endif //ALG_LOCAL_H

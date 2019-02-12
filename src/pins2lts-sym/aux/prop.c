@@ -782,7 +782,6 @@ find_counter_examples(vset_t ce_states, vset_t states)
         // For each invariant
         for (int i = 0; i < num_inv; i++) {
             // Check if it was already violated
-            //if (!inv_violated[i]) {
             vset_project(inv_set[i], states);
             // Make copy of the invariant set
             vset_t container = ((struct inv_info_s*) inv_expr[i]->context)->container;
@@ -803,8 +802,7 @@ find_counter_examples(vset_t ce_states, vset_t states)
                 inv_violated[i] = 1;
                 iv = 1;
                 num_inv_violated++;
-                }
-            //}
+            }
         }
     }
 }

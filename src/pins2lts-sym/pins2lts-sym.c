@@ -447,7 +447,7 @@ static void actual_main(void *arg)
 
     init_domain(VSET_IMPL_AUTOSELECT);
 
-    vset_t initial = vset_create(domain, -1, NULL);
+    const vset_t initial = vset_create(domain, -1, NULL);
     int *src = RTmalloc (sizeof(int[N]));
     GBgetInitialState(model, src);
     vset_add(initial, src);
@@ -510,41 +510,6 @@ static void actual_main(void *arg)
                 Warning(info, "Found invariant");
             }
         }
-
-        //vset_t CE = vset_create(domain, -1, NULL);
-
-
-
-//        Warning(info, "Extracting counter examples");
-//        find_counter_examples(CE, visited);
-//
-//        if (!vset_is_empty(CE)) {
-//            long count;
-//            long double el;
-//            vset_count_fn(CE, &count, &el);
-//            Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
-//
-//            vset_t P = vset_create(domain, -1, NULL);
-//            vset_copy(P, visited);
-//            vset_minus(P, CE);
-
-//        vset_copy(P, CE);
-//
-//            rt_timer_t pdr_timer;
-//            pdr_timer = RTcreateTimer();
-//        RTstartTimer(pdr_timer);
-//
-//        property_directed_reachability(initial, P, visited);
-//
-//        RTstopTimer(pdr_timer);
-//        RTprintTimer(info, pdr_timer, "PDR took: ");
-////        RTresetTimer(pdr_timer);
-//            RTstartTimer(pdr_timer);
-//            reverse_reach(initial, P, visited);
-//            RTstopTimer(pdr_timer);
-//            RTprintTimer(info, pdr_timer, "Reverse reach took: ");
-        //}
-
     } else {
         /* run reachability */
         run_reachability(visited, files[1]);
@@ -553,7 +518,6 @@ static void actual_main(void *arg)
 
         /* report states */
         final_stat_reporting(visited);
-
     }
     /* save LTS */
     if (files[1] != NULL) {
