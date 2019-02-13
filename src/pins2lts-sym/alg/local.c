@@ -27,7 +27,6 @@
 #include <util-lib/util.h>
 #include <aux/prop.h>
 
-#include <alg/rpdr.h>
 #include <sylvan.h>
 
 
@@ -36,6 +35,8 @@
 
 #include <time.h>
 #include <fcntl.h>
+#include <alg/pdr/pdr.h>
+#include "alg/pdr/reverse-reach.h"
 
 
 
@@ -252,14 +253,6 @@ explore_cb (void *context, int *src)
     explored++;
 }
 
-static void vset_count_info(vset_t set, int group,  int level)
-{
-    long count;
-    long double el;
-    vset_count_fn(set, &count, &el);
-    Warning (info, "level: %ld\t\t group: %ld\t\t nodes: %ld\t\t states: %.0Lf", level, group, count, el);
-}
-
 /**
  * Assumes
  */
@@ -420,7 +413,7 @@ compositional_reachability_full(vset_t I, vset_t V)
             recombine_new_states_for_group(i);
         }
 
-        Warning(info, "[comp_reach] %d new states (total %d)\n", (explored - explored_old), explored);
+        Warning(info, "[comp_reach] %d new states (total %d)", (explored - explored_old), explored);
 
         //vset_reorder (domain);
 

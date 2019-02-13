@@ -36,7 +36,7 @@
 #include <pins2lts-sym/alg/reach.h>
 #include <pins2lts-sym/alg/sat.h>
 #include <pins2lts-sym/alg/scc.h>
-#include <pins2lts-sym/alg/rpdr.h>
+#include <alg/pdr/pdr.h>
 #include <pins2lts-sym/aux/options.h>
 #include <pins2lts-sym/aux/output.h>
 #include <pins2lts-sym/aux/prop.h>
@@ -235,12 +235,9 @@ init_domain(vset_implementation_t impl) {
         }
     }
 
-    //total_proj->count = N;
     for (int i = 0; i < N; i++) {
         ci_add(total_proj, i);
     }
-
-    ci_print(total_proj);
 
     l_projs = (ci_list **) dm_rows_to_idx_table (GBgetStateLabelInfo(model));
     for (int i = 0; i < sLbls; i++) {
@@ -451,8 +448,6 @@ static void actual_main(void *arg)
     int *src = RTmalloc (sizeof(int[N]));
     GBgetInitialState(model, src);
     vset_add(initial, src);
-
-    Print(infoShort, "got initial state");
 
     /* if writing .dot files, open directory first */
     if (dot_dir != NULL) {

@@ -3,6 +3,7 @@
 
 #include <pins-lib/pins.h>
 #include <vset-lib/vector_set.h>
+#include <stdbool.h>
 
 typedef struct expand_info {
     int group;
