@@ -324,8 +324,6 @@ compute_full_states(vset_t initial_states, vset_t total_states)
     vset_t states = vset_create(domain, combined_projection->count, combined_projection->data);
     vset_t tmp;
 
-    Warning(info, "Computing full states...");
-
     vset_copy(states, V_r[0]);
 
     for(int i = 1; i <nGrps; i++) {
@@ -371,13 +369,13 @@ refine_visited_set(vset_t I, vset_t visited)
         vset_copy(P, visited);
         vset_minus(P, CE);
         if (refine_strategy == PDR || refine_strategy == PDR_INTERLEAVED) {
-            Warning(info, "Refining with PDR");
+            Warning(info, "[comp_reach] Refining with PDR");
             if(!property_directed_reachability(I, P, visited)) {
                 Warning(info, "Refinement found a counter example!");
                 return false;
             }
         } else if (refine_strategy == REV_REACH || refine_strategy == REV_REACH_INTERLEAVED) {
-            Warning(info, "Refining with reverse reachability");
+            Warning(info, "[comp_reach] Refining with reverse reachability");
             if(!reverse_reach(I, P, visited)) {
                 Warning(info, "Refinement found a counter example!");
                 return false;
@@ -409,22 +407,20 @@ compositional_reachability_full(vset_t I, vset_t V)
 
     do { // while \exists_i \in [1..K] : Q^r_i != 0 do
         level++;
-        all_done = true;
 
-        Warning(info, "Level: %d", level);
+        Warning(info, "[comp_reach] Level: %d", level);
+
         explored_old = explored;
         for (int i = 0; i < nGrps; i++) {
             //write_group_t      *wg = &writers[i];
             vset_clear   (Q_w[i]);
 
             learn_new_transitions_for_group(i);
-
             apply_transition_relation_to_group(i);
-
             recombine_new_states_for_group(i);
         }
 
-        Warning(info, "Explored %d new states (total %d)", (explored - explored_old), explored);
+        Warning(info, "[comp_reach] %d new states (total %d)\n", (explored - explored_old), explored);
 
         //vset_reorder (domain);
 
@@ -448,7 +444,7 @@ compositional_reachability_full(vset_t I, vset_t V)
             refine_visited_set(I, V);
         }
 
-        all_done = (bool)vset_equal(V, V_old);
+        all_done = (bool) vset_equal(V, V_old);
 
         vset_copy(total_queue, V);
         vset_minus(total_queue, V_old);

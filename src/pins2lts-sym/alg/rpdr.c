@@ -154,7 +154,6 @@ get_bad_state(int *state, vset_t universe, vset_t P, vset_t seen)
     vset_minus(unseen_states, seen);
 
     if (!vset_is_empty(unseen_states)) {
-        //vset_random(unseen_states, state);
         vset_example(unseen_states, state);
         return true;
     }
@@ -477,18 +476,6 @@ property_directed_reachability(vset_t I, vset_t P, vset_t universe)
         has_bad_state = get_bad_state(bad_state, universe, P, seen_states);
 
         if (!has_bad_state) {
-            RTstopTimer(pdr_timer);
-
-            RTprintTimer(info, pdr_timer, "pdr time: ");
-            RTprintTimer(info, generalize_timer, "generalize time: ");
-            RTprintTimer(info, image_timer, "pre-image time: ");
-
-            RTresetTimer(pdr_timer);
-            RTresetTimer(image_timer);
-            RTresetTimer(generalize_timer);
-
-            print_frame_sizes(total);
-            Warning(info, "[pdr] Creating new frame");
             // Create new frame
             frame* new_frame = RTmallocZero (sizeof(frame));
             new_frame->states = empty();
@@ -519,31 +506,30 @@ property_directed_reachability(vset_t I, vset_t P, vset_t universe)
 
         vset_clear(bad_state_set);
 
-        // Warning(info, "[pdr] Propagate removed states..");
         // Propagate removed states backwards
         if (propagate_removed_states(total->prev)) {
             // All code beyond this is just verifying the invariant
-            Warning(info, "pdr: Verifying invariant: ");
+            Warning(info, "[pdr] Verifying invariant: ");
 
             assert(!vset_is_empty(invariant_states));
 
             vset_t inv = empty();
-            Warning(info, "pdr: Checking inductiveness...");
+            Warning(info, "[pdr] Checking inductiveness...");
             post(inv, invariant_states, universe);
             vset_minus(inv, invariant_states);
 
-            Warning(info, "pdr: Checking soundness...");
+            Warning(info, "[pdr] Checking soundness...");
             vset_t tmp_invariant_states = empty();
             vset_copy(tmp_invariant_states, invariant_states);
             vset_minus(tmp_invariant_states, P);
 
             if (vset_is_empty(inv) && vset_is_empty(tmp_invariant_states)) {
-                Warning(info, "pdr: invariant found");
+                Warning(info, "[pdr] invariant found");
                 vset_count_info(invariant_states);
                 vset_copy(universe, invariant_states);
                 return true;
             } else {
-                Warning(info, "pdr: error");
+                Warning(info, "[pdr] error");
                 exit(0);
             }
         }
@@ -580,6 +566,9 @@ reverse_reach(vset_t I, vset_t P, vset_t U)
 
     vset_copy(U, V);
     vset_copy(bad_states, V);
+
+    vset_destroy(V_old);
+    vset_destroy(V);
 
     return true;
 }

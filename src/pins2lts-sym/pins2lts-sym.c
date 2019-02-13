@@ -172,7 +172,7 @@ init_domain(vset_implementation_t impl) {
     group_tmp      = (vset_t*)RTmalloc(nGrps * sizeof(vset_t));
     r_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
     w_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
-    //total_proj     = (ci_list *)RTmalloc(sizeof(int) * N + 1);
+
     total_proj     = ci_create(N);
 
     l_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[sLbls]));
