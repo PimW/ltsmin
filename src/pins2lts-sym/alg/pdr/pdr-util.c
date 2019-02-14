@@ -72,6 +72,7 @@ verify_invariant(vset_t invariant_states, vset_t P, vset_t universe) {
     Warning(info, "[pdr] Checking inductiveness...");
     post(inv, invariant_states, universe);
     vset_minus(inv, invariant_states);
+    assert(vset_is_empty(inv));
 
     Warning(info, "[pdr] Checking soundness...");
     vset_copy(tmp_invariant_states, invariant_states);

@@ -361,7 +361,7 @@ refine_visited_set(vset_t I, vset_t visited)
     if (!vset_is_empty(CE)) {
         vset_copy(P, visited);
         vset_minus(P, CE);
-        if (refine_strategy == PDR || refine_strategy == PDR_INTERLEAVED) {
+        if (refine_strategy == PDR || refine_strategy == PDR_INTERLEAVED || refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
             Warning(info, "[comp_reach] Refining with PDR");
             if(!property_directed_reachability(I, P, visited)) {
                 Warning(info, "Refinement found a counter example!");
@@ -462,7 +462,7 @@ compositional_reachability (vset_t I, vset_t V)
     int                 level = 0;
     int                 explored_old = 0;
     bool                all_done;
-    Warning(info, "Running compositional reachability without state space computation...");
+    Warning(info, "Running compositional reachability with partial state space computation...");
 
     do { // while \exists_i \in [1..K] : Q^r_i != 0 do
         level++;
@@ -757,7 +757,12 @@ run_compositional_reachability (vset_t I, vset_t V)
     if (sat_strategy == SAT) {
         Abort("Compositional reachability does not support saturation");
     } else {
-        level = compositional_reachability_full(I, V);
+        if (refine_strategy == REV_REACH_INTERLEAVED || refine_strategy == PDR_INTERLEAVED || refine_strategy == REV_PDR_INTERLEAVED) {
+            level = compositional_reachability_full(I, V);
+        } else {
+            level = compositional_reachability(I, V);
+        }
+
     }
     RTstopTimer(reach_timer);
 

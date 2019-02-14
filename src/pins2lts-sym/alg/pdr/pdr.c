@@ -41,15 +41,17 @@
 static vset_t g_universe;
 static vset_t g_initial;
 
+static vset_t source_states;
+static vset_t goal_states;
+
 vset_t invariant_states;
 
 bool
-get_bad_state(int *state, vset_t universe, vset_t P, vset_t seen)
+get_bad_state(int *state, vset_t source_states, vset_t seen)
 {
     vset_t unseen_states = empty();
 
-    vset_copy(unseen_states, universe);
-    vset_minus(unseen_states, P);
+    vset_copy(unseen_states, source_states);
     vset_minus(unseen_states, seen);
 
     if (!vset_is_empty(unseen_states)) {
@@ -65,12 +67,12 @@ get_bad_state(int *state, vset_t universe, vset_t P, vset_t seen)
  * Check if a set os states contains an initial state
  */
 bool
-contains_initial(vset_t states)
+contains_goal(vset_t states)
 {
     vset_t tmp = empty();
 
     vset_copy(tmp, states);
-    vset_intersect(tmp, g_initial);
+    vset_intersect(tmp, goal_states);
 
     bool result = (bool)vset_is_empty(tmp);
 
@@ -88,7 +90,12 @@ is_relative_inductive(vset_t states, struct frame *f)
 {
     vset_t tmp = empty();
 
-    post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states
+    //post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states
+    if (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
+        post(tmp, states, f->prev->states);
+    } else {
+        post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states
+    }
 
     bool val =  (bool) vset_is_empty(tmp); // == 0
     vset_destroy(tmp);
@@ -119,7 +126,7 @@ generalize(vset_t result_states, int* state, struct frame *current_frame)
 
     vset_t generalized_states = empty();
 
-    assert(!contains_initial(result_states));
+    assert(!contains_goal(result_states));
     assert(is_relative_inductive(result_states, current_frame));
 
     for (int i = 0; i < N; i++) {
@@ -135,7 +142,7 @@ generalize(vset_t result_states, int* state, struct frame *current_frame)
         vset_copy_match(generalized_states, g_universe, tmp_projection->count, tmp_projection->data, projected_state);
         assert(!vset_is_empty(generalized_states));
 
-        if (!contains_initial(generalized_states)
+        if (!contains_goal(generalized_states)
             && is_relative_inductive(generalized_states, current_frame)) {
             ci_copy(projection, tmp_projection);
             vset_copy(result_states, generalized_states);
@@ -222,9 +229,14 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
         vset_example(unvisited_states, state);
         vset_add(state_set, state);
 
-        // Compute pre-image for the bad state and intersect it with the previous frame
+        // Compute (pre-)image for the bad state and intersect it with the previous frame
         vset_clear(new_bad_states);
-        pre(new_bad_states, state_set, current_frame->prev->states);
+        if (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
+            post(new_bad_states, state_set, current_frame->prev->states);
+        } else {
+            pre(new_bad_states, state_set, current_frame->prev->states);
+        }
+
 
         // If state is not relative inductive then do a recursive step
         if (!vset_is_empty(new_bad_states)) {
@@ -305,24 +317,42 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
  * @param universe - set of all states found by compositional reachability.
  * @return true <=> an invariant is found, false <=> a counter-example is found.
  */
+void init_source_and_goal_states(vset_t I, vset_t P, vset_t U) {
+    vset_t notP = empty();
+    vset_copy(notP, U);
+    vset_minus(notP, P);
+
+    source_states = empty();
+    goal_states = empty();
+
+    if (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
+        vset_copy(source_states, I);
+        vset_copy(goal_states, notP);
+    } else {
+        vset_copy(source_states, notP);
+        vset_copy(goal_states, I);
+    }
+}
+
 bool
-property_directed_reachability(vset_t I, vset_t P, vset_t universe)
+property_directed_reachability(vset_t I, vset_t P, vset_t U)
 {
     Warning(info, "Initialize PDR");
 
-    g_universe = universe;
-    g_initial = I;
-
-    frame *frame_initial = frame_create(I);
-    frame *total = frame_create(universe);
-
-    insert_after(frame_initial, total);
-
-    frame *current_frame = total;
+    g_universe = U;
 
     vset_t bad_state_set = empty();
     vset_t seen_states = empty();
     vset_t counter_example = empty();
+
+    init_source_and_goal_states(I, P, U);
+
+    frame *frame_initial = frame_create(goal_states);
+    frame *total = frame_create(U);
+
+    insert_after(frame_initial, total);
+
+    frame *current_frame = total;
 
     int *bad_state = malloc(sizeof(int) * N);
 
@@ -333,13 +363,13 @@ property_directed_reachability(vset_t I, vset_t P, vset_t universe)
     int depth = 0;
     Warning(info, "[pdr] Checking depth %d", depth);
     while(true) {
-        has_bad_state = get_bad_state(bad_state, universe, P, seen_states);
+        has_bad_state = get_bad_state(bad_state, source_states, seen_states);
 
         if (!has_bad_state) {
             // Create new frame
-            frame* new_frame = frame_create(universe);
-
+            frame* new_frame = frame_create(U);
             insert_after(total, new_frame);
+
             vset_clear(seen_states);
 
             current_frame = total;
@@ -351,7 +381,7 @@ property_directed_reachability(vset_t I, vset_t P, vset_t universe)
         }
 
         vset_add(bad_state_set, bad_state);
-        assert(!contains_initial(bad_state_set));
+        assert(!contains_goal(bad_state_set));
 
         if (!vset_is_empty(bad_state_set)) {
             recursive_remove_states(counter_example, bad_state_set, current_frame);
@@ -366,7 +396,12 @@ property_directed_reachability(vset_t I, vset_t P, vset_t universe)
 
         // Propagate removed states backwards
         if (propagate_removed_states(total->prev)) {
-            return verify_invariant(invariant_states, P, universe);
+            if (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
+                vset_copy(bad_state_set, U);
+                vset_minus(bad_state_set, invariant_states);
+                vset_copy(invariant_states, bad_state_set);
+            }
+            return verify_invariant(invariant_states, P, U);
         }
     }
 }

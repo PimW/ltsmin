@@ -109,6 +109,8 @@ static si_map_entry REFINE[] = {
         {"reverse-reach-interleaved", REV_REACH_INTERLEAVED},
         {"pdr", PDR},
         {"pdr-interleaved", PDR_INTERLEAVED},
+        {"reverse-pdr", REV_PDR},
+        {"reverse-pdr-interleaved", REV_REACH_INTERLEAVED},
         {NULL, 0}
 };
 
@@ -242,7 +244,7 @@ struct poptOption options[] = {
     { "trim" , 0 , POPT_ARG_VAL , &trimming , 1 , "apply trimming on SCCs" , NULL },
     { "scc" , 0 , POPT_ARG_INT , &sccs , 0 , "detect sccs" , NULL },
     { "local" , 0 , POPT_ARG_VAL , &local , 1 , "Use local group exploration to learn transition relations." , NULL },
-    { "refine-strategy" , 0, POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT , &refine , 0 , "select the refinement strategy" , "<none|reverse-reach|reverse-reach-interleaved|pdr|pdr-interleaved>" },
+    { "refine-strategy" , 0, POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT , &refine , 0 , "select the refinement strategy" , "<none|reverse-reach|reverse-reach-interleaved|pdr|pdr-interleaved|reverse-pdr|reverse-pdr-interleaved>" },
     { "action" , 0 , POPT_ARG_STRING , &act_detect , 0 , "detect action prefix" , "<action prefix>" },
     { invariant_long , 'i' , POPT_ARG_STRING , NULL , 0, "detect invariant violations (can be given multiple times)", NULL },
     { "no-exit", 'n', POPT_ARG_VAL, &no_exit, 1, "no exit on error, just count (for error counters use -v)", NULL },

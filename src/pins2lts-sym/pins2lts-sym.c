@@ -500,7 +500,7 @@ static void actual_main(void *arg)
     if (local) {
         run_compositional_reachability (initial, visited);
 
-        if (refine_strategy == PDR || refine_strategy == REV_REACH) {
+        if (refine_strategy == PDR || refine_strategy == REV_REACH || refine_strategy == REV_PDR) {
             if (refine_visited_set(initial, visited)) {
                 Warning(info, "Found invariant");
             }
