@@ -23,8 +23,8 @@ reverse_reach(vset_t I, vset_t P, vset_t U)
         bad_states = empty();
     }
 
-    vset_t V_old = vset_create(domain, -1, NULL);
-    vset_t V = vset_create(domain, -1, NULL);
+    vset_t V_old = empty();
+    vset_t V = empty();
 
     get_bad_states(V, U, P);
     vset_union(V, bad_states);
@@ -41,11 +41,14 @@ reverse_reach(vset_t I, vset_t P, vset_t U)
         return false;
     }
 
-    vset_copy(U, V);
+    vset_minus(U, V);
     vset_copy(bad_states, V);
 
     vset_destroy(V_old);
     vset_destroy(V);
+
+    Warning(info, "[reverse_reach] Found Invariant");
+    vset_count_info(U);
 
     return true;
 }

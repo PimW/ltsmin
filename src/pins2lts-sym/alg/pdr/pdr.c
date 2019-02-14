@@ -46,6 +46,8 @@ static vset_t goal_states;
 
 vset_t invariant_states;
 
+bool using_reverse_pdr;
+
 bool
 get_bad_state(int *state, vset_t source_states, vset_t seen)
 {
@@ -91,7 +93,7 @@ is_relative_inductive(vset_t states, struct frame *f)
     vset_t tmp = empty();
 
     //post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states
-    if (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
+    if (using_reverse_pdr) {
         post(tmp, states, f->prev->states);
     } else {
         post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states
@@ -184,6 +186,14 @@ propagate_removed_states(struct frame *frame)
     return false;
 }
 
+void compute_next_states(frame *current_frame, vset_t new_bad_states, vset_t state_set) {
+    if (using_reverse_pdr) {
+        post(new_bad_states, state_set, current_frame->prev->states);
+    } else {
+        pre(new_bad_states, state_set, current_frame->prev->states);
+    }
+}
+
 /**
  * A recursive DFS algorithm that removes states that are relative inductive for each frame.
  *  First the function checks whether bad_states contains any states. If not this frame is relative
@@ -231,11 +241,7 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
 
         // Compute (pre-)image for the bad state and intersect it with the previous frame
         vset_clear(new_bad_states);
-        if (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
-            post(new_bad_states, state_set, current_frame->prev->states);
-        } else {
-            pre(new_bad_states, state_set, current_frame->prev->states);
-        }
+        compute_next_states(current_frame, new_bad_states, state_set);
 
 
         // If state is not relative inductive then do a recursive step
@@ -325,7 +331,7 @@ void init_source_and_goal_states(vset_t I, vset_t P, vset_t U) {
     source_states = empty();
     goal_states = empty();
 
-    if (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
+    if (using_reverse_pdr) {
         vset_copy(source_states, I);
         vset_copy(goal_states, notP);
     } else {
@@ -338,6 +344,8 @@ bool
 property_directed_reachability(vset_t I, vset_t P, vset_t U)
 {
     Warning(info, "Initialize PDR");
+
+    using_reverse_pdr = (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED);
 
     g_universe = U;
 
@@ -396,7 +404,7 @@ property_directed_reachability(vset_t I, vset_t P, vset_t U)
 
         // Propagate removed states backwards
         if (propagate_removed_states(total->prev)) {
-            if (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
+            if (using_reverse_pdr) {
                 vset_copy(bad_state_set, U);
                 vset_minus(bad_state_set, invariant_states);
                 vset_copy(invariant_states, bad_state_set);

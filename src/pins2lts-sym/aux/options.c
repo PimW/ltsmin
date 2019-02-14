@@ -110,7 +110,7 @@ static si_map_entry REFINE[] = {
         {"pdr", PDR},
         {"pdr-interleaved", PDR_INTERLEAVED},
         {"reverse-pdr", REV_PDR},
-        {"reverse-pdr-interleaved", REV_REACH_INTERLEAVED},
+        {"reverse-pdr-interleaved", REV_PDR_INTERLEAVED},
         {NULL, 0}
 };
 

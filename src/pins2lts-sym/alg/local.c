@@ -433,7 +433,7 @@ compositional_reachability_full(vset_t I, vset_t V)
 
         compute_full_states(I, V);
 
-        if (refine_strategy == PDR_INTERLEAVED || refine_strategy == REV_REACH_INTERLEAVED) {
+        if (refine_strategy == PDR_INTERLEAVED || refine_strategy == REV_REACH_INTERLEAVED || refine_strategy == REV_PDR_INTERLEAVED) {
             refine_visited_set(I, V);
         }
 
@@ -758,6 +758,7 @@ run_compositional_reachability (vset_t I, vset_t V)
         Abort("Compositional reachability does not support saturation");
     } else {
         if (refine_strategy == REV_REACH_INTERLEAVED || refine_strategy == PDR_INTERLEAVED || refine_strategy == REV_PDR_INTERLEAVED) {
+            Warning(info, "Using interleaved refinement, computing full state-space for each iteration");
             level = compositional_reachability_full(I, V);
         } else {
             level = compositional_reachability(I, V);
