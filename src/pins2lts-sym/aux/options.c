@@ -325,6 +325,8 @@ long max_vis_count = 0;
 long max_grp_count = 0;
 long max_trans_count = 0;
 long max_mu_count = 0;
+long max_node_count = 0;
+
 model_t model;
 vset_t initial, visited;
 vrel_t *group_next;

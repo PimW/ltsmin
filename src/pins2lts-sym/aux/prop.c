@@ -753,8 +753,6 @@ find_counter_examples(vset_t ce_states, vset_t states)
                 vset_copy_match_set(ce_states, states, inv_set[i], inv_proj[i]->count, inv_proj[i]->data);
 
                 Warning(info, "Invariant violation (%s)!", inv_detect[i]);
-                inv_violated[i] = 1;
-                num_inv_violated++;
             }
         }
     }

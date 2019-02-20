@@ -151,6 +151,7 @@ extern long max_vis_count;
 extern long max_grp_count;
 extern long max_trans_count;
 extern long max_mu_count;
+extern long max_node_count;
 extern model_t model;
 extern vset_t initial, visited;
 extern vrel_t *group_next;

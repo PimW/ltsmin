@@ -267,7 +267,12 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
             assert(current_frame != NULL);
             assert(current_frame->next != NULL);
 
-            pre(propagated_states, current_frame->next->states, new_bad_states);
+            if (refine_strategy == REV_PDR || refine_strategy == REV_PDR_INTERLEAVED) {
+                post(propagated_states, current_frame->next->states, new_bad_states);
+            } else {
+                pre(propagated_states, current_frame->next->states, new_bad_states);
+            }
+
 
             vset_minus(new_bad_states, propagated_states);
 
@@ -384,6 +389,9 @@ property_directed_reachability(vset_t I, vset_t P, vset_t U)
             total = new_frame;
 
             depth++;
+
+            compute_frame_sizes(total);
+
             Warning(info, "[pdr] Checking depth %d", depth);
             continue;
         }

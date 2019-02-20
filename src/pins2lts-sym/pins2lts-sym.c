@@ -505,9 +505,26 @@ static void actual_main(void *arg)
                 Warning(info, "Found invariant");
             }
         }
+
+        if (log_active(info)) {
+            Warning(info, "Max node count: %ld", max_node_count);
+
+            long final_node_count;
+            vset_node_count(&final_node_count, visited);
+            Warning(info, "Final node count: %ld", final_node_count);
+        }
+
     } else {
         /* run reachability */
         run_reachability(visited, files[1]);
+
+        if (log_active(info)) {
+            Warning(info, "Max node count: %ld", max_node_count);
+
+            long final_node_count;
+            vset_node_count(&final_node_count, visited);
+            Warning(info, "Final node count: %ld", final_node_count);
+        }
 
         if (sccs) detect_sccs(visited);
 

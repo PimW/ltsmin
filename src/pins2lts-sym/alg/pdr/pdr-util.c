@@ -11,6 +11,13 @@ vset_count_info(vset_t set)
     Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
 }
 
+void
+vset_node_count(long *node_count, vset_t set)
+{
+    long double el;
+    vset_count_fn(set, node_count, &el);
+}
+
 inline vset_t
 empty ()
 {
@@ -51,7 +58,7 @@ print_state_f (int *state)
     }
 }
 
-static void
+void
 print_state_cb (void *ctx, int *state)
 {
     for (int l = 0; l < N; l++) {

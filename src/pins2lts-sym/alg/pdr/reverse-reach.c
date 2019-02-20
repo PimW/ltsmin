@@ -19,6 +19,8 @@ get_bad_states(vset_t bad_states, vset_t U, vset_t P)
 bool
 reverse_reach(vset_t I, vset_t P, vset_t U)
 {
+    long node_count = 0;
+
     if (bad_states == NULL) {
         bad_states = empty();
     }
@@ -31,6 +33,12 @@ reverse_reach(vset_t I, vset_t P, vset_t U)
 
     int level = 0;
     while (!vset_equal(V_old, V)) {
+        if (log_active(info)) {
+            vset_node_count(&node_count, V);
+            if (node_count > max_node_count) {
+                max_node_count = node_count;
+            }
+        }
         vset_copy(V_old, V);
         pre(V, V, U);
         level++;
@@ -42,13 +50,18 @@ reverse_reach(vset_t I, vset_t P, vset_t U)
     }
 
     vset_minus(U, V);
+    if (log_active(info)) {
+        vset_node_count(&node_count, U);
+        if (node_count > max_node_count) {
+            max_node_count = node_count;
+        }
+    }
     vset_copy(bad_states, V);
 
     vset_destroy(V_old);
     vset_destroy(V);
 
     Warning(info, "[reverse_reach] Found Invariant");
-    vset_count_info(U);
 
     return true;
 }
