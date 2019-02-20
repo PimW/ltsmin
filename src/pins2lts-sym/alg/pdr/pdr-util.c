@@ -2,6 +2,11 @@
 #include "pdr-util.h"
 #include <pins2lts-sym/alg/aux.h>
 
+/**
+ * Compute and output the amount of nodes and states in a set.
+ *
+ * @param set
+ */
 void
 vset_count_info(vset_t set)
 {
@@ -11,6 +16,13 @@ vset_count_info(vset_t set)
     Warning (info, "nodes: %ld\t\t states: %.0Lf", count, el);
 }
 
+/**
+ * Computes and returns the amount of nodes in a set.
+ *
+ * @param node_count
+ * @param set
+ * @return node_count
+ */
 void
 vset_node_count(long *node_count, vset_t set)
 {
@@ -18,6 +30,11 @@ vset_node_count(long *node_count, vset_t set)
     vset_count_fn(set, node_count, &el);
 }
 
+/**
+ * Create an empty vset with the default domain.
+ *
+ * @return Empty allocated vset
+ */
 inline vset_t
 empty ()
 {
@@ -50,6 +67,11 @@ pre(vset_t dst, vset_t source, vset_t universe)
     add_step(true, dst, source, universe);
 }
 
+/**
+ * Print a state from an array of integers
+ *
+ * @param state
+ */
 void
 print_state_f (int *state)
 {
@@ -58,15 +80,31 @@ print_state_f (int *state)
     }
 }
 
+/**
+ * Print state callback method, wrapper around print_state_f
+ * to use with the vset_enum method.
+ *
+ * @param ctx argument required by vset_enum (unused)
+ * @param state argument passed by vset_enum
+ */
 void
 print_state_cb (void *ctx, int *state)
 {
-    for (int l = 0; l < N; l++) {
-        Printf (info, "%2d,", state[l]);
-    }
+    print_state_f(state);
     Printf(info, "\n");
 }
 
+/**
+ * Verify an invariant, this checks:
+ *  1) invariant <= P (invariant contains only safe states)
+ *  2) post(invariant) <= invariant (invariant has not transitions to non-invariant states)
+ *  3) count(invariant) != 0 (invariant should not be empty)
+ *
+ * @param invariant_states
+ * @param P
+ * @param universe
+ * @return bool true if invariant is valid.
+ */
 bool
 verify_invariant(vset_t invariant_states, vset_t P, vset_t universe) {
     Warning(info, "[pdr] Verifying invariant: ");
@@ -99,11 +137,3 @@ verify_invariant(vset_t invariant_states, vset_t P, vset_t universe) {
 
     return true;
 }
-
-//void
-//print_state_cb (void *context, int *src)
-//{
-//    int group = *(int *)context;
-//    Statef (info, src, inv_proj[group]);
-//    Warning (info, " (%d)\n", group);
-//}
