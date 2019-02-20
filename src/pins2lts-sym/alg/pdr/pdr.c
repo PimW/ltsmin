@@ -76,7 +76,7 @@ contains_goal(vset_t states)
     vset_copy(tmp, states);
     vset_intersect(tmp, goal_states);
 
-    bool result = (bool)vset_is_empty(tmp);
+    bool result = (bool) vset_is_empty(tmp);
 
     vset_destroy(tmp);
 
@@ -94,7 +94,8 @@ is_relative_inductive(vset_t states, struct frame *f)
 
     //post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states
     if (using_reverse_pdr) {
-        post(tmp, states, f->prev->states);
+        //post(tmp, states, f->prev->states);
+        pre(tmp, f->prev->states, states);
     } else {
         post(tmp, f->prev->states, states); // Post(prev(current_frame).states) /\ states
     }
@@ -184,6 +185,26 @@ propagate_removed_states(struct frame *frame)
         i++;
     }
     return false;
+}
+
+void
+compute_frame_sizes(struct frame *frame)
+{
+    struct frame *f = frame;
+    long node_count = 0;
+
+    int i = 0;
+    while (f->prev != NULL) {
+        if (log_active(info)) {
+            vset_node_count(&node_count,frame->states);
+            if (node_count > max_node_count) {
+                max_node_count = node_count;
+            }
+        }
+
+        f = f->prev;
+        i++;
+    }
 }
 
 void compute_next_states(frame *current_frame, vset_t new_bad_states, vset_t state_set) {
@@ -310,6 +331,25 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
     free(state);
 }
 
+
+void init_source_and_goal_states(vset_t I, vset_t P, vset_t U) {
+    vset_t notP = empty();
+    vset_copy(notP, U);
+    vset_minus(notP, P);
+
+    source_states = empty();
+    goal_states = empty();
+
+    if (using_reverse_pdr) {
+        vset_copy(source_states, I);
+        vset_copy(goal_states, notP);
+    } else {
+        vset_copy(source_states, notP);
+        vset_copy(goal_states, I);
+    }
+}
+
+
 /**
  * Main PDR loop:
  *  First the initial and final frames are created containing the initial states and universe.
@@ -328,23 +368,6 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
  * @param universe - set of all states found by compositional reachability.
  * @return true <=> an invariant is found, false <=> a counter-example is found.
  */
-void init_source_and_goal_states(vset_t I, vset_t P, vset_t U) {
-    vset_t notP = empty();
-    vset_copy(notP, U);
-    vset_minus(notP, P);
-
-    source_states = empty();
-    goal_states = empty();
-
-    if (using_reverse_pdr) {
-        vset_copy(source_states, I);
-        vset_copy(goal_states, notP);
-    } else {
-        vset_copy(source_states, notP);
-        vset_copy(goal_states, I);
-    }
-}
-
 bool
 property_directed_reachability(vset_t I, vset_t P, vset_t U)
 {

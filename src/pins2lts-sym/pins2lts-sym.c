@@ -52,6 +52,8 @@
 
 #ifdef HAVE_SYLVAN
 #include <sylvan.h>
+#include <alg/pdr/pdr-util.h>
+
 #else
 #define LACE_ME
 #define lace_suspend()
