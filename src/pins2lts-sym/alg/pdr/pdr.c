@@ -39,7 +39,6 @@
 #include <sylvan.h>
 
 static vset_t g_universe;
-static vset_t g_initial;
 
 static vset_t source_states;
 static vset_t goal_states;
@@ -119,7 +118,7 @@ is_relative_inductive(vset_t states, struct frame *f)
 void
 generalize(vset_t result_states, int* state, struct frame *current_frame)
 {
-    ci_list *projection = ci_create((size_t)total_proj->count); // TODO: add size of base/full projection
+    ci_list *projection = ci_create((size_t)total_proj->count);
     ci_list *tmp_projection = ci_create((size_t)total_proj->count);
 
     vset_clear(result_states);
@@ -207,7 +206,16 @@ compute_frame_sizes(struct frame *frame)
     }
 }
 
-void compute_next_states(frame *current_frame, vset_t new_bad_states, vset_t state_set) {
+/**
+ * Compute either the image or pre-image of a set of states intersected with the previous frame
+ * depending on whether PDR or reverse-PDR is used.
+ *
+ * @param current_frame
+ * @param new_bad_states
+ * @param state_set
+ */
+void
+compute_next_states(frame *current_frame, vset_t new_bad_states, vset_t state_set) {
     if (using_reverse_pdr) {
         post(new_bad_states, state_set, current_frame->prev->states);
     } else {
@@ -248,6 +256,9 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
     // Clear bad states and use it as the return set for forward propagation
     vset_clear(bad_states);
 
+    // The recursion arrived at the initial frame, if the intersection between bad_states and the initial
+    // states is not empty then we have found a acounter example, otherwise the states were relative inductive
+    // and can be propagated upwards.
     if (frame_is_initial(current_frame)) {
         Warning(info, "[recursive_remove_states] Recursive remove states: reached initial frame..");
         vset_intersect(unvisited_states, current_frame->states);
@@ -263,7 +274,6 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
         // Compute (pre-)image for the bad state and intersect it with the previous frame
         vset_clear(new_bad_states);
         compute_next_states(current_frame, new_bad_states, state_set);
-
 
         // If state is not relative inductive then do a recursive step
         if (!vset_is_empty(new_bad_states)) {
@@ -293,7 +303,6 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
             } else {
                 pre(propagated_states, current_frame->next->states, new_bad_states);
             }
-
 
             vset_minus(new_bad_states, propagated_states);
 
@@ -331,7 +340,14 @@ recursive_remove_states(vset_t counter_example, vset_t bad_states, frame *curren
     free(state);
 }
 
-
+/**
+ * Initialize the goal and source states for PDR/reverse-PDR depending on which version is used.
+ * Normal PDR requires the not P states to be used as source and the initial state is the goal.
+ * For reverse PDR these two sets are reversed.
+ * @param I
+ * @param P
+ * @param U
+ */
 void init_source_and_goal_states(vset_t I, vset_t P, vset_t U) {
     vset_t notP = empty();
     vset_copy(notP, U);

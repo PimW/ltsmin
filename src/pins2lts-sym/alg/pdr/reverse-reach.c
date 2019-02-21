@@ -6,16 +6,29 @@ vset_t bad_states;
 
 /**
  * Takes all states in U that do not satisfy P
+ *
  * @return a set of bad states
  */
 void
-get_bad_states(vset_t bad_states, vset_t U, vset_t P)
+get_bad_states(vset_t states, vset_t U, vset_t P)
 {
-    vset_copy(bad_states, U);
-    vset_minus(bad_states, P);
+    vset_copy(states, U);
+    vset_minus(states, P);
 }
 
-
+/**
+ * Performs reverse reachability from all bad states to see if I can be reached.
+ * The initial run just takes all states from U not in P as starting point.
+ *
+ * Each execution after takes all states that could reach !P (unsafe states) and the new bad states
+ * as initial set for reverse reachability. This should improve performance when the algorithm is used
+ * as refinement in CEGAR.
+ *
+ * @param I
+ * @param P
+ * @param U
+ * @return
+ */
 bool
 reverse_reach(vset_t I, vset_t P, vset_t U)
 {
