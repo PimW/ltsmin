@@ -43,16 +43,13 @@
 
 
 
-/**
+/*
  * TODO:
  * [x] Learn only new transitions (rest transition relation)
  *    [ ] Project to the union of read and write projections
  *    [ ] Improve next-state function to allow different projections
- * [ ] Restrict queue sets to the right program counter
- * [ ] Try grouping by process
  * [ ] Try group merging
  * [x] Chaining
- * [-] Saturation
  * [x] Full visited sets vs. New level
  */
 
@@ -110,9 +107,7 @@ r_end(write_group_t *wg)
 
 static vset_t *exact_explored;     // visited write
 
-static vset_t *V_w;     // visited write
 static vset_t *Q_w;     // queue   write
-static vset_t *C_w;     // complement write
 
 static vset_t *V_r;     // visited read
 static vset_t *Q_r;     // queue   read
@@ -161,7 +156,12 @@ Statef (log_t log, int *state, ci_list *proj)
     }
 }
 
-
+/**
+ * Output state projected on the read projection of a group.
+ *
+ * @param context (group)
+ * @param src (state)
+ */
 void
 print_state_r (void *context, int *src)
 {
@@ -170,6 +170,12 @@ print_state_r (void *context, int *src)
     Warning (info, " (%d)\n", group);
 }
 
+/**
+ * Output state projected on the write projection of a gorup.
+ *
+ * @param context (group)
+ * @param src (state)
+ */
 void
 print_state_w (void *context, int *src)
 {
@@ -193,54 +199,14 @@ group_add (void *context, transition_info_t *ti, int *dst, int *cpy)
     (void) ti;
 }
 
-
-static void
-group_add (void *context, transition_info_t *ti, int *dst, int *cpy)
-{
-    group_add_t        *ctx = (group_add_t *) context;
-
-    ci_list *row = wrows[ctx->group];
-    vset_add (Q_w[ctx->group], dst);
-    int dst_short[row->count];
-    int cpy_short[row->count];
-    for (int i = 0; i < row->count; i++) {
-        int j = ci_get(row,i);
-        dst_short[i] = dst[j];
-        cpy_short[i] = cpy[j];
-    }
-    vrel_add_cpy (group_next[ctx->group], ctx->src, dst_short, cpy_short);
-    vset_add (Q_w[ctx->group], dst_short);
-
-    Statef (debug, ctx->src, r_projs[ctx->group]);
-    Printf (debug, " -(%2d)-> ", ctx->group);
-    Statef (debug, dst_short, w_projs[ctx->group]);
-    Printf (debug, "\n");
-    (void) ti;
-}
-
-void
-group_add3 (void *context, transition_info_t *ti, int *dst, int *cpy)
-{
-    group_add_t        *ctx = (group_add_t *) context;
-
-    Statef (debug, ctx->src, p_all);
-    Printf (debug, " -(%2d)-> ", ctx->group);
-    Statef (debug, dst, p_all);
-    Printf (debug, "\n");
-    (void) ti; (void) cpy;
-}
-
-
-
-void
-print_next_state (void *context, int *src)
-{
-    group_add_t         ctx;
-    ctx.group = *(int *)context;
-    ctx.src = src;
-    GBgetTransitionsLong (model, ctx.group, src, group_add3, &ctx);
-}
-
+/**
+ * Callback to explore a state transition from the source.
+ * The GBgetTransitionsShortR2W uses the model to execute the group (transition).
+ * The group_add callback adds the transition to the transition relation.
+ *
+ * @param context
+ * @param src
+ */
 static void
 explore_cb (void *context, int *src)
 {
@@ -253,7 +219,8 @@ explore_cb (void *context, int *src)
 }
 
 /**
- * Assumes
+ * Explore all states in the set of states N_r[i] that have not been explored yet for that group.
+ * The transitions are added to the transition relation to be used later.
  */
 static void
 learn_new_transitions_for_group (int i)
@@ -261,14 +228,34 @@ learn_new_transitions_for_group (int i)
     vset_enum    (N_r[i], explore_cb, &i);
 }
 
-static void apply_transition_relation_to_group (int i)
+/**
+ * Applies the learned transition relation to the queue sets of group i.
+ * Since the states are projected we need to compute full states for the transition relation.
+ * This is done by joining the set with it's complement projected on the initial state.
+ * Since no vars in I are used in the transition relation and the states are directly projected
+ * back to the write projection we use no actual information from the initial states.
+ * @param i
+ */
+static void
+apply_transition_relation_to_group (int i)
 {
     vset_join    (source_set, Q_r[i], C_r[i]);
     vset_next    (image_set, source_set, group_next[i]);
     vset_project (Q_w[i], image_set);
 }
 
-static void recombine_new_states_for_group (int i)
+/**
+ * After executing apply_transition_relation_to_group for a group i, Q_w[i] should contain the new level.
+ * At this point all new states should be computed and added to the new queue sets for all other groups.
+ * There are two cases:
+ *  1) r_proj[i] <= w_proj[i], in this case we can directly project the write set to the read set.
+ *  2) r_proj[i] is not a subset of w_proj[i], we then project the write states to the intersection of the two projections.
+ *     we then join this set with the set of visited state projected on the variables not in Q_w[i].
+ *     this results in the new states projected on r_projs[i].
+ * @param i
+ */
+static void
+recombine_new_states_for_group (int i)
 {
     write_group_t *wg = &writers[i];
     for (reader_t *r = r_bgn(wg); r <  r_end(wg); r++) {
@@ -304,7 +291,13 @@ static void recombine_new_states_for_group (int i)
     }
 }
 
-
+/**
+ * This function takes all projected visited states sets and joins them all into a single set
+ * projection on all variables.
+ *
+ * @param initial_states
+ * @param total_states
+ */
 void
 compute_full_states(vset_t initial_states, vset_t total_states)
 {
@@ -348,6 +341,14 @@ compute_full_states(vset_t initial_states, vset_t total_states)
     vset_destroy(tmp);
 }
 
+/**
+ * Executes a refinement strategy on the visited set. The visited set is then updated when an invariant
+ * is found.
+ * If a counter example is found the function returns false.
+ * @param I
+ * @param visited
+ * @return
+ */
 bool
 refine_visited_set(vset_t I, vset_t visited)
 {
