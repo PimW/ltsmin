@@ -128,7 +128,6 @@ static vset_t  X;
 // Sets for vset_next
 static vset_t source_set;
 static vset_t image_set;
-static vset_t initial_set;
 
 // Complement projections
 ci_list **r_compl_projs;
@@ -181,7 +180,7 @@ print_state_w (void *context, int *src)
 
 
 static void
-group_add_old (void *context, transition_info_t *ti, int *dst, int *cpy)
+group_add (void *context, transition_info_t *ti, int *dst, int *cpy)
 {
     group_add_t        *ctx = (group_add_t *) context;
 
@@ -249,14 +248,15 @@ explore_cb (void *context, int *src)
     ctx.group = *(int *)context;
     ctx.src = src;
 
-    GBgetTransitionsShortR2W (model, ctx.group, src, group_add_old, &ctx);
+    GBgetTransitionsShortR2W (model, ctx.group, src, group_add, &ctx);
     explored++;
 }
 
 /**
  * Assumes
  */
-static void learn_new_transitions_for_group (int i)
+static void
+learn_new_transitions_for_group (int i)
 {
     vset_enum    (N_r[i], explore_cb, &i);
 }
@@ -275,7 +275,6 @@ static void recombine_new_states_for_group (int i)
         int j = r->index;
         if (r->tmp == NULL) { // writer's domain overlaps reader
             vset_project (X_r[j], Q_w[i]);
-            //vset_minus   (X_r[j], V_r[j]);
             long n1;
             long double e1;
             vset_count_fn (X_r[j], &n1, &e1);
@@ -326,7 +325,7 @@ compute_full_states(vset_t initial_states, vset_t total_states)
 
         vset_join(tmp, states, V_r[i]);
 
-        vset_clear(states);
+        vset_destroy(states);
         states = vset_create(domain, combined_projection->count, combined_projection->data);
         vset_copy(states, tmp);
 
@@ -475,9 +474,7 @@ compositional_reachability (vset_t I, vset_t V)
             vset_clear   (Q_w[i]);
 
             learn_new_transitions_for_group(i);
-
             apply_transition_relation_to_group(i);
-
             recombine_new_states_for_group(i);
 
             if (strategy == CHAIN || strategy == CHAIN_P) {
@@ -506,7 +503,6 @@ compositional_reachability (vset_t I, vset_t V)
             vset_union(V_r[i], Q_r[i]);
 
             if (strategy != BFS_P && strategy != CHAIN_P) {
-                //Warning(info, "Using full visited state set");
                 vset_copy(Q_r[i], V_r[i]);
             }
 
@@ -523,92 +519,72 @@ compositional_reachability (vset_t I, vset_t V)
     (void) V;
 }
 
-/**
- * For each group i, this function finds all groups j that read from i's
- * write support. The intersection of read and write support is used
- * as a projection. Together with a projection of the complement
- * (j's read support minus the intersection) this is used to construct
- * all new values for the read inputs using the join call
- * (join is an intersection operation of sets with different projections, that
- *  can also be supported in MDDs).
- */
 void
-find_domain_intersections ()
+add_readers_for_group(ci_list *(*group_w2r_i), ci_list **rcols, int i)
 {
-    /* Collect write group to read group matrix */
-    ci_list *(*group_w2r)[nGrps];
-    group_w2r = RTmallocZero (sizeof(*group_w2r) * nGrps);
-    //ci_list ***group_w2r = RTmallocZero (sizeof(ci_list *[nGrps*nGrps]) + sizeof(ci_list **[nGrps]));
-    writers = RTmallocZero (sizeof(write_group_t[nGrps]));
-
-    rrows = (ci_list**) dm_rows_to_idx_table (read_matrix);
-    wrows = (ci_list**) dm_rows_to_idx_table (write_matrix);
-
-    ci_list **rcols = (ci_list**) dm_cols_to_idx_table (read_matrix);
-    for (int i = 0; i < nGrps; i++) {
-        //group_w2r[i] = (ci_list **) &group_w2r[nGrps + i * nGrps];
-        // iterate writing slots s for group i
-        for (int *s = ci_begin(w_projs[i]); s < ci_end(w_projs[i]); s++) {
-            // iterate groups j reading from s
-            for (int *j = ci_begin(rcols[*s]); j < ci_end(rcols[*s]); j++) {
-                ci_list *wt = group_w2r[i][*j];
-                if (wt == NULL) {
-                    writers[i].num_readers++;
-                    group_w2r[i][*j] = wt = ci_create (N);
-                }
-                ci_add (wt, *s);
+    // iterate writing slots s for group i
+    for (int *s = ci_begin(w_projs[i]); s < ci_end(w_projs[i]); s++) {
+        // iterate groups j reading from s
+        for (int *j = ci_begin(rcols[*s]); j < ci_end(rcols[*s]); j++) {
+            ci_list *wt = group_w2r_i[*j];
+            if (wt == NULL) {
+                writers[i].num_readers++;
+                group_w2r_i[*j] = wt = ci_create (N);
             }
-        }
-
-        // create read support complement sets (for collecting visited states)
-        if (ci_count(r_projs[i]) == 0) {
-            writers[i].complement = NULL;
-        } else {
-            ci_list *compl = ci_create (N - ci_count(r_projs[i]));
-//            int *s = ci_begin(r_projs[i]);
-            for (int l = 0; l < N; l++) {
-//                if (s != ci_end(r_projs[l]) && *s == l) {
-//                    s++;
-//                } else {
-                    ci_add_if (compl, l, ci_binary_search(r_projs[i], l) == -1);
-//                }
-            }
-            writers[i].complement = vset_create (domain, compl->count, compl->data);
-            HREassert (ci_count(r_projs[i]) + ci_count(compl) == N);
+            ci_add (wt, *s);
         }
     }
-    RTfree (rcols);
+}
 
-    /* Collapse matrix into list ( write_group_t[nGrps] ) */
-    for (int i = 0; i < nGrps; i++) {
-        int c = 0;
-        write_group_t *wg = &writers[i];
-        wg->index = i;
-        wg->readers = RTmallocZero (sizeof(reader_t[wg->num_readers]));
-        for (int j = 0; j < nGrps; j++) {
-            ci_list *slots = group_w2r[i][j];
-            reader_t *r = &wg->readers[c];
-            r->index = j;
-            if (slots == NULL) continue;
-            c++;
-
-            int compl_len = r_projs[j]->count - slots->count;
-            HREassert (compl_len >= 0);
-            if (compl_len == 0) continue; // writer's domain overlaps reader
-
-            r->slots = slots;
-            r->compl = ci_create (compl_len);
-            for (int *s = ci_begin(r_projs[j]); s < ci_end(r_projs[j]); s++)
-                ci_add_if (r->compl, *s, ci_binary_search(slots, *s) == -1);
-            HREassert(ci_count(r->compl) == compl_len);
-            r->complement = vset_create (domain, compl_len, r->compl->data);
-            r->tmp = vset_create (domain, slots->count, slots->data);
-            //ci_free (slots);
+void
+create_complement_projection(int i)
+{
+    // create read support complement sets (for collecting visited states)
+    if (ci_count(r_projs[i]) == 0) {
+        writers[i].complement = NULL;
+    } else {
+        ci_list *compl = ci_create (N - ci_count(r_projs[i]));
+        for (int l = 0; l < N; l++) {
+            ci_add_if (compl, l, ci_binary_search(r_projs[i], l) == -1);
         }
-        HREassert (c == wg->num_readers);
+        writers[i].complement = vset_create (domain, compl->count, compl->data);
+        HREassert (ci_count(r_projs[i]) + ci_count(compl) == N);
     }
-    RTfree (group_w2r);
+}
 
+void
+create_writer(ci_list *(*group_w2r), int i)
+{
+    int c = 0;
+    write_group_t *wg = &writers[i];
+    wg->index = i;
+    wg->readers = RTmallocZero (sizeof(reader_t[wg->num_readers]));
+    for (int j = 0; j < nGrps; j++) {
+        ci_list *slots = group_w2r[j];
+        reader_t *r = &wg->readers[c];
+        r->index = j;
+        if (slots == NULL) continue;
+        c++;
+
+        int compl_len = r_projs[j]->count - slots->count;
+        HREassert (compl_len >= 0);
+        if (compl_len == 0) continue; // writer's domain overlaps reader
+
+        r->slots = slots;
+        r->compl = ci_create (compl_len);
+        for (int *s = ci_begin(r_projs[j]); s < ci_end(r_projs[j]); s++)
+            ci_add_if (r->compl, *s, ci_binary_search(slots, *s) == -1);
+        HREassert(ci_count(r->compl) == compl_len);
+        r->complement = vset_create (domain, compl_len, r->compl->data);
+        r->tmp = vset_create (domain, slots->count, slots->data);
+        //ci_free (slots);
+    }
+    HREassert (c == wg->num_readers);
+}
+
+void
+print_write_group_info()
+{
     Printf (infoLong, "\n");
     size_t total = 0;
     for (int j = 0; j < nGrps; j++) {
@@ -633,6 +609,42 @@ find_domain_intersections ()
     Printf (infoLong, "\nTotal: %zu\n", total);
 }
 
+/**
+ * For each group i, this function finds all groups j that read from i's
+ * write support. The intersection of read and write support is used
+ * as a projection. Together with a projection of the complement
+ * (j's read support minus the intersection) this is used to construct
+ * all new values for the read inputs using the join call
+ * (join is an intersection operation of sets with different projections, that
+ *  can also be supported in MDDs).
+ */
+void
+find_domain_intersections ()
+{
+    /* Collect write group to read group matrix */
+    ci_list *(*group_w2r)[nGrps];
+    group_w2r = RTmallocZero (sizeof(*group_w2r) * nGrps);
+    writers = RTmallocZero (sizeof(write_group_t[nGrps]));
+
+    rrows = (ci_list**) dm_rows_to_idx_table (read_matrix);
+    wrows = (ci_list**) dm_rows_to_idx_table (write_matrix);
+
+    ci_list **rcols = (ci_list**) dm_cols_to_idx_table (read_matrix);
+    for (int i = 0; i < nGrps; i++) {
+        add_readers_for_group(group_w2r[i], rcols, i);
+        create_complement_projection(i);
+    }
+    RTfree (rcols);
+
+    /* Collapse matrix into list ( write_group_t[nGrps] ) */
+    for (int i = 0; i < nGrps; i++) {
+        create_writer(group_w2r[i], i);
+    }
+    RTfree (group_w2r);
+
+    print_write_group_info();
+}
+
 void
 init_comp_reach(vset_t I)
 {
@@ -641,9 +653,7 @@ init_comp_reach(vset_t I)
         Q_r = group_tmp;
         V_r = group_explored;
         exact_explored = RTmalloc(nGrps * sizeof(vset_t));
-        V_w = RTmalloc(nGrps * sizeof(vset_t));
         Q_w = RTmalloc(nGrps * sizeof(vset_t));
-        C_w = RTmalloc(nGrps * sizeof(vset_t));
         X_r = RTmalloc(nGrps * sizeof(vset_t));
         Y_r = RTmalloc(nGrps * sizeof(vset_t));
         N_r = RTmalloc(nGrps * sizeof(vset_t));
@@ -652,7 +662,6 @@ init_comp_reach(vset_t I)
 
         // TODO: move to projections
         r_compl_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
-        w_compl_projs        = (ci_list **)RTmalloc(sizeof(ci_list *[nGrps]));
 
         for (int i = 0; i < nGrps; i++) {
             // Store complement sets for read projections
@@ -661,18 +670,9 @@ init_comp_reach(vset_t I)
                 ci_add_if (r_compl_projs[i], l, ci_binary_search(r_projs[i], l) == -1);
             }
 
-            // Store complement sets for read projections
-            w_compl_projs[i] = ci_create (N - ci_count(w_projs[i]));
-            for (int l = 0; l < N; l++) {
-                ci_add_if (w_compl_projs[i], l, ci_binary_search(w_projs[i], l) == -1);
-            }
-
             exact_explored[i] = vset_create(domain, r_projs[i]->count, r_projs[i]->data);
             vset_copy(exact_explored[i], group_explored[i]);
-            V_w[i] = vset_create (domain, w_projs[i]->count, w_projs[i]->data);
             Q_w[i] = vset_create (domain, w_projs[i]->count, w_projs[i]->data);
-            C_w[i] = vset_create (domain, w_compl_projs[i]->count, w_compl_projs[i]->data);
-
             X_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
             Y_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
             N_r[i] = vset_create (domain, r_projs[i]->count, r_projs[i]->data);
@@ -681,12 +681,10 @@ init_comp_reach(vset_t I)
 
             vset_project (Q_r[i], I);       // init read queue
 
-            vset_copy    (V_r[i], Q_r[i]);  // todo: if no chaining?
+            vset_copy    (V_r[i], Q_r[i]);
             vset_copy    (N_r[i], Q_r[i]);
-            vset_project (V_w[i], I);       // init write visited
 
             vset_project(C_r[i], I);
-            vset_project(C_w[i], I);
         }
 
         source_set = vset_create(domain, -1, NULL);
@@ -707,16 +705,17 @@ deinit_comp_reach()
     if (HREme (HREglobal()) == 0) {
         vset_destroy (X);
         for (int i = 0; i < nGrps; i++) {
-            vset_destroy (V_w[i]);
             vset_destroy (Q_w[i]);
             vset_destroy (X_r[i]);
             vset_destroy (Y_r[i]);
+            vset_destroy (N_r[i]);
+            vset_destroy (C_r[i]);
         }
-        RTfree (V_w);
         RTfree (Q_w);
         RTfree (X_r);
         RTfree (Y_r);
-
+        RTfree (N_r);
+        RTfree (C_r);
         ci_free (p_all);
 
         for (write_group_t *wg = w_bgn(); wg <  w_end(); wg++) {
